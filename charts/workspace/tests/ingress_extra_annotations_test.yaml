@@ -1,0 +1,159 @@
+suite: ingress.extraAnnotations + tls.enabled:false (TLS-offload-at-the-edge fork)
+# extraAnnotations must merge into EVERY Ingress this chart renders (all five
+# ingress*.yaml files), and tls.enabled:false must render no tls: block and no
+# cert-manager annotation anywhere, with helm template output still valid
+# YAML. This suite spot-checks one representative Ingress per template file;
+# the "aisy combo" smoke render (see repo README / PR description) confirms
+# full breadth across every document.
+templates:
+  - templates/ingress.yaml
+  - templates/ingress-oauth2.yaml
+  - templates/ingress-public.yaml
+  - templates/ingress-webhooks.yaml
+  - templates/ingress-claude-api.yaml
+  - templates/oauth2-proxy.yaml
+values:
+  - test-values.yaml
+tests:
+  - it: extraAnnotations is absent by default (no stray annotation keys)
+    template: templates/ingress.yaml
+    documentIndex: 0
+    asserts:
+      - notExists:
+          path: metadata.annotations.team
+
+  - it: extraAnnotations merges into ingress.yaml's main Ingress
+    template: templates/ingress.yaml
+    documentIndex: 0
+    set:
+      ingress.extraAnnotations:
+        team: platform
+        cost-center: kube-coder
+    asserts:
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+      - equal:
+          path: metadata.annotations["cost-center"]
+          value: kube-coder
+      # existing annotations must still render alongside the extra ones
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/proxy-buffering"]
+          value: "off"
+
+  - it: extraAnnotations merges into the LAST Ingress in ingress.yaml (websocket)
+    template: templates/ingress.yaml
+    set:
+      ingress.extraAnnotations:
+        team: platform
+    documentSelector:
+      path: metadata.name
+      value: ws-testuser-websocket
+    asserts:
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+
+  - it: extraAnnotations merges into ingress-oauth2.yaml
+    template: templates/ingress-oauth2.yaml
+    set:
+      ingress.auth.type: oauth2
+      oauth2.cookieSecret: cs
+      oauth2.clientId: cid
+      oauth2.clientSecret: csec
+      ingress.extraAnnotations:
+        team: platform
+    documentSelector:
+      path: metadata.name
+      value: ws-testuser-oauth2-browser
+    asserts:
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+
+  - it: extraAnnotations merges into ingress-public.yaml
+    template: templates/ingress-public.yaml
+    set:
+      ingress.auth.type: none
+      readOnly: true
+      ingress.extraAnnotations:
+        team: platform
+    asserts:
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+
+  - it: extraAnnotations merges into ingress-webhooks.yaml
+    template: templates/ingress-webhooks.yaml
+    set:
+      ingress.auth.type: oauth2
+      oauth2.cookieSecret: cs
+      oauth2.clientId: cid
+      oauth2.clientSecret: csec
+      ingress.extraAnnotations:
+        team: platform
+    asserts:
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+
+  - it: extraAnnotations merges into ingress-claude-api.yaml
+    template: templates/ingress-claude-api.yaml
+    set:
+      ingress.auth.type: oauth2
+      oauth2.cookieSecret: cs
+      oauth2.clientId: cid
+      oauth2.clientSecret: csec
+      ingress.extraAnnotations:
+        team: platform
+    asserts:
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+
+  - it: extraAnnotations merges into oauth2-proxy.yaml's own Ingress (the /oauth2 callback path)
+    template: templates/oauth2-proxy.yaml
+    set:
+      ingress.auth.type: oauth2
+      oauth2.cookieSecret: cs
+      oauth2.clientId: cid
+      oauth2.clientSecret: csec
+      ingress.extraAnnotations:
+        team: platform
+    documentSelector:
+      path: kind
+      value: Ingress
+    asserts:
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+
+  - it: tls.enabled=false renders no tls block / cert-manager / force-ssl-redirect (basic auth, ingress.yaml)
+    template: templates/ingress.yaml
+    documentIndex: 0
+    set:
+      ingress.tls.enabled: false
+    asserts:
+      - notExists:
+          path: spec.tls
+      - notExists:
+          path: metadata.annotations["cert-manager.io/cluster-issuer"]
+      - notExists:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/force-ssl-redirect"]
+
+  - it: tls.enabled=false renders no tls block / cert-manager anywhere in ingress-oauth2.yaml
+    template: templates/ingress-oauth2.yaml
+    set:
+      ingress.auth.type: oauth2
+      oauth2.cookieSecret: cs
+      oauth2.clientId: cid
+      oauth2.clientSecret: csec
+      ingress.tls.enabled: false
+    documentSelector:
+      path: metadata.name
+      value: ws-testuser-oauth2-vscode
+    asserts:
+      - notExists:
+          path: spec.tls
+      - notExists:
+          path: metadata.annotations["cert-manager.io/cluster-issuer"]

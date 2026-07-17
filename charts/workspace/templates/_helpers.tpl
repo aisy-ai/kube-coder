@@ -19,6 +19,16 @@ via the `proxy-set-headers` annotation (which is *not* a snippet and
 is allowed).
 */}}
 
+{{/* Extra annotations merged into every Ingress this chart renders. Empty by
+default -> renders nothing (byte-identical to upstream). Caller nindents this
+to the annotations block's indent level (nindent replaces every internal
+newline too, so a multi-key map comes out correctly indented as a whole). */}}
+{{- define "workspace.ingressExtraAnnotations" -}}
+{{- with .Values.ingress.extraAnnotations }}
+{{ toYaml . }}
+{{- end }}
+{{- end -}}
+
 {{/* Pod scheduling (nodeSelector/tolerations) onto a dedicated node pool.
 Both empty by default -> renders nothing (byte-identical to upstream). */}}
 {{- define "workspace.scheduling" -}}

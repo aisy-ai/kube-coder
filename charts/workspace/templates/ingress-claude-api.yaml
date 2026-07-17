@@ -39,6 +39,7 @@ metadata:
       proxy_set_header X-Auth-Request-Access-Token "";
       proxy_set_header Remote-User "";
     {{- end }}
+    {{- include "workspace.ingressExtraAnnotations" . | nindent 4 }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}

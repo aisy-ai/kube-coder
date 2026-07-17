@@ -104,6 +104,11 @@ controller:
 
 ingress:
   className: nginx
+  # Arbitrary annotations merged into the controller Ingress, on top of the
+  # chart's own — same rationale as the workspace chart's
+  # ingress.extraAnnotations. Empty by default -> no change to rendered
+  # annotations.
+  extraAnnotations: {}
   tls:
     enabled: true
     # REQUIRED when tls.enabled — cert-manager writes the issued cert here.

@@ -27,6 +27,7 @@ metadata:
     # 1 MiB cap mirrors the in-pod content-length check in WebhookManager.
     # nginx default is 1m anyway, but spelled out here so a future bump is intentional.
     nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+    {{- include "workspace.ingressExtraAnnotations" . | nindent 4 }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}

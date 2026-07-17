@@ -30,6 +30,7 @@ metadata:
     {{- if .Values.ingress.tls.enabled }}
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     {{- end }}
+    {{- include "workspace.ingressExtraAnnotations" . | nindent 4 }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
