@@ -33,7 +33,9 @@ metadata:
     {{- if .Values.ingress.tls.enabled }}
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     {{- end }}
+    {{- if .Values.ingress.extraAnnotations }}
     {{- include "workspace.ingressExtraAnnotations" . | nindent 4 }}
+    {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
@@ -91,7 +93,9 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    {{- if .Values.ingress.extraAnnotations }}
     {{- include "workspace.ingressExtraAnnotations" . | nindent 4 }}
+    {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
@@ -137,7 +141,9 @@ metadata:
     {{- if .Values.ingress.tls.enabled }}
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     {{- end }}
+    {{- if .Values.ingress.extraAnnotations }}
     {{- include "workspace.ingressExtraAnnotations" . | nindent 4 }}
+    {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
@@ -183,7 +189,9 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    {{- if .Values.ingress.extraAnnotations }}
     {{- include "workspace.ingressExtraAnnotations" . | nindent 4 }}
+    {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
@@ -223,7 +231,9 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    {{- if .Values.ingress.extraAnnotations }}
     {{- include "workspace.ingressExtraAnnotations" . | nindent 4 }}
+    {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}

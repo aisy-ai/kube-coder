@@ -20,7 +20,9 @@ metadata:
     # by the concurrent _collect() fan-out in controller.py.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    {{- if .Values.ingress.extraAnnotations }}
     {{- include "wc.ingressExtraAnnotations" . | nindent 4 }}
+    {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}

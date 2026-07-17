@@ -50,7 +50,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      {{- if or .Values.controller.scheduling.nodeSelector .Values.controller.scheduling.tolerations }}
       {{- include "wc.scheduling" . | nindent 6 }}
+      {{- end }}
       containers:
       - name: oauth2-proxy
         image: quay.io/oauth2-proxy/oauth2-proxy:v7.5.0
