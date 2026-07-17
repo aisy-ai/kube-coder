@@ -42,6 +42,7 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      {{- include "wc.scheduling" . | nindent 6 }}
       containers:
       - name: controller
         image: "{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}"

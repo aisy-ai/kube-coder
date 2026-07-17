@@ -34,6 +34,17 @@ image:
   pullPolicy: Always
   pullSecretName: regcred
 
+# Pod placement onto a dedicated node pool (e.g. a Karpenter NodePool reserved
+# for kube-coder workspaces). Both empty by default so upstream/DigitalOcean
+# deployments keep scheduling onto any node; a fork that dedicates a pool sets
+# both together (a nodeSelector alone would leave the pool's taint unmatched
+# and the pod stuck Pending; a toleration alone would let it land elsewhere).
+# Applied to every long-running workspace pod: the ide Deployment, the
+# holding-page Deployment, and the oauth2-proxy Deployment.
+scheduling:
+  nodeSelector: {}
+  tolerations: []
+
 # Ingress configuration
 #   auth.type:
 #     "basic"  — http basic auth from .ingress.auth.secretName

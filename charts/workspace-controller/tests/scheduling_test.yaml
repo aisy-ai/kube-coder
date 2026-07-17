@@ -1,0 +1,66 @@
+suite: controller pod scheduling (dedicated node pool, e.g. Karpenter taint/label)
+templates:
+  - templates/deployment.yaml
+  - templates/controller-configmap.yaml
+  - templates/controller-web-configmap.yaml
+  - templates/oauth2-proxy.yaml
+values:
+  - test-values.yaml
+tests:
+  - it: renders no nodeSelector/tolerations by default (controller pod)
+    template: templates/deployment.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.nodeSelector
+      - notExists:
+          path: spec.template.spec.tolerations
+
+  - it: renders no nodeSelector/tolerations by default (controller oauth2-proxy)
+    template: templates/oauth2-proxy.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notExists:
+          path: spec.template.spec.nodeSelector
+      - notExists:
+          path: spec.template.spec.tolerations
+
+  - it: applies nodeSelector + tolerations to the controller pod when set
+    template: templates/deployment.yaml
+    set:
+      controller.scheduling.nodeSelector:
+        intent: kube-coder
+      controller.scheduling.tolerations:
+        - key: kube-coder
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector.intent
+          value: kube-coder
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: kube-coder
+
+  - it: applies nodeSelector + tolerations to the controller oauth2-proxy pod when set
+    template: templates/oauth2-proxy.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      controller.scheduling.nodeSelector:
+        intent: kube-coder
+      controller.scheduling.tolerations:
+        - key: kube-coder
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector.intent
+          value: kube-coder
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: kube-coder

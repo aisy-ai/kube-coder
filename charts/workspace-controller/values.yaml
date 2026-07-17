@@ -22,6 +22,14 @@ controller:
     pullPolicy: IfNotPresent
     pullSecretName: regcred
 
+  # Pod placement onto a dedicated node pool — same rationale as the workspace
+  # chart's top-level `scheduling` (see charts/workspace/values.yaml). Applied
+  # to the controller Deployment and its oauth2-proxy Deployment. Both empty
+  # by default -> renders nothing.
+  scheduling:
+    nodeSelector: {}
+    tolerations: []
+
   # A workspace is any Deployment whose name starts with this prefix. The
   # username shown in the UI is the name minus the prefix. Mirrors the
   # ws-<user> convention used by the workspace chart.

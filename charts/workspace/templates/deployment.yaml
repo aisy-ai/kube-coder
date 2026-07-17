@@ -49,6 +49,7 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      {{- include "workspace.scheduling" . | nindent 6 }}
       containers:
       - name: ide
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

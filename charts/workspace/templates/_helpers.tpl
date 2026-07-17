@@ -19,6 +19,19 @@ via the `proxy-set-headers` annotation (which is *not* a snippet and
 is allowed).
 */}}
 
+{{/* Pod scheduling (nodeSelector/tolerations) onto a dedicated node pool.
+Both empty by default -> renders nothing (byte-identical to upstream). */}}
+{{- define "workspace.scheduling" -}}
+{{- if .Values.scheduling.nodeSelector }}
+nodeSelector:
+{{ toYaml .Values.scheduling.nodeSelector | indent 2 }}
+{{- end }}
+{{- if .Values.scheduling.tolerations }}
+tolerations:
+{{ toYaml .Values.scheduling.tolerations | indent 2 }}
+{{- end }}
+{{- end -}}
+
 {{/* ---- ResourceQuota derivation (#103) --------------------------------------
 Size the per-namespace ResourceQuota from the workspace pod's ACTUAL resource
 requests/limits, so a heavier workspace (a bigger ide, or the privileged dind

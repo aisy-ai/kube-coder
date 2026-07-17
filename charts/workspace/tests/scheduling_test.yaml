@@ -1,0 +1,116 @@
+suite: pod scheduling (dedicated node pool, e.g. Karpenter taint/label)
+# scheduling.nodeSelector/tolerations let a fork target a dedicated node pool
+# (taint + label) without forcing that topology on every deployer. Empty
+# (default) must render byte-identical to upstream: no nodeSelector/tolerations
+# keys at all, not empty ones (an empty `tolerations: []` differs from an
+# absent key to some admission tooling).
+templates:
+  - templates/deployment.yaml
+  - templates/browser-configmap.yaml
+  - templates/claude-configmap.yaml
+  - templates/terminal-entry-configmap.yaml
+  - templates/workspace-entrypoint-configmap.yaml
+  - templates/holding-deployment.yaml
+  - templates/oauth2-proxy.yaml
+values:
+  - test-values.yaml
+tests:
+  - it: renders no nodeSelector/tolerations by default (workspace pod)
+    template: templates/deployment.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.nodeSelector
+      - notExists:
+          path: spec.template.spec.tolerations
+
+  - it: renders no nodeSelector/tolerations by default (holding page)
+    template: templates/holding-deployment.yaml
+    documentIndex: 0
+    asserts:
+      - notExists:
+          path: spec.template.spec.nodeSelector
+      - notExists:
+          path: spec.template.spec.tolerations
+
+  - it: renders no nodeSelector/tolerations by default (oauth2-proxy)
+    template: templates/oauth2-proxy.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      ingress.auth.type: oauth2
+      oauth2.cookieSecret: test-secret-1234567890123456
+      oauth2.clientId: test-id
+      oauth2.clientSecret: test-secret
+    asserts:
+      - notExists:
+          path: spec.template.spec.nodeSelector
+      - notExists:
+          path: spec.template.spec.tolerations
+
+  - it: applies nodeSelector + tolerations to the workspace pod when set
+    template: templates/deployment.yaml
+    set:
+      scheduling.nodeSelector:
+        intent: kube-coder
+      scheduling.tolerations:
+        - key: kube-coder
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector
+          value:
+            intent: kube-coder
+      - equal:
+          path: spec.template.spec.tolerations[0]
+          value:
+            key: kube-coder
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
+
+  - it: applies nodeSelector + tolerations to the holding-page pod when set
+    template: templates/holding-deployment.yaml
+    documentIndex: 0
+    set:
+      scheduling.nodeSelector:
+        intent: kube-coder
+      scheduling.tolerations:
+        - key: kube-coder
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector.intent
+          value: kube-coder
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: kube-coder
+
+  - it: applies nodeSelector + tolerations to the oauth2-proxy pod when set
+    template: templates/oauth2-proxy.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      ingress.auth.type: oauth2
+      oauth2.cookieSecret: test-secret-1234567890123456
+      oauth2.clientId: test-id
+      oauth2.clientSecret: test-secret
+      scheduling.nodeSelector:
+        intent: kube-coder
+      scheduling.tolerations:
+        - key: kube-coder
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector.intent
+          value: kube-coder
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: kube-coder
