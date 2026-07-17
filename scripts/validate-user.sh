@@ -82,6 +82,12 @@ fi
 #    a placeholder in values.yaml is intentionally overridden by a secret.
 CHART="$ROOT/charts/workspace"
 PLACEHOLDER_RE='CHANGE ME|PLACEHOLDER-OVERRIDE|__USER__|__COOKIE_SECRET__|__IMAGE_TAG__|__DATE__'
+# Whether the merged values render an imagePullSecrets block at all (empty
+# image.pullSecretName, e.g. an EKS node-role pull, renders none — see
+# charts/workspace/templates/deployment.yaml). Defaults to "assume yes" so a
+# failed render below falls back to the old always-check behavior rather
+# than silently skipping a real gap.
+PULL_SECRET_CONFIGURED=1
 if [ ! -d "$CHART" ]; then
   fail "workspace chart missing at $CHART"
 else
@@ -98,6 +104,15 @@ else
     fail "helm template failed — chart will not render with current values:"
     echo "$RENDER_OUT" | sed 's/^/         /' | head -30
   else
+    # Plain substring test (not `echo | grep -q`) — under `set -o pipefail`,
+    # grep -q can exit as soon as it finds a match, SIGPIPE-ing the echo
+    # before it finishes writing, which makes the PIPELINE itself look
+    # failed even though grep matched. A pure-bash case avoids the pipe.
+    case "$RENDER_OUT" in
+      *imagePullSecrets:*) PULL_SECRET_CONFIGURED=1 ;;
+      *) PULL_SECRET_CONFIGURED=0 ;;
+    esac
+
     if echo "$RENDER_OUT" | grep -qE "$PLACEHOLDER_RE"; then
       fail "placeholders survived secrets merge (will land in cluster):"
       echo "$RENDER_OUT" | grep -nE "$PLACEHOLDER_RE" | sed 's/^/         /'
@@ -154,7 +169,9 @@ if command -v kubectl >/dev/null 2>&1; then
   else
     warn "namespace '$NS' does not exist yet — 'make deploy USER=$NAME' will create it (#103)"
   fi
-  if kubectl get secret regcred -n "$NS" >/dev/null 2>&1; then
+  if [ "$PULL_SECRET_CONFIGURED" -eq 0 ]; then
+    pass "image.pullSecretName is empty — skipping regcred check (node-role pulls, e.g. EKS IAM)"
+  elif kubectl get secret regcred -n "$NS" >/dev/null 2>&1; then
     pass "image pull secret 'regcred' present in $NS"
   else
     warn "image pull secret 'regcred' not yet in $NS — 'make deploy' copies it from the control-plane namespace (REGCRED_SRC_NAMESPACE)"
