@@ -59,6 +59,15 @@ RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /
     && apt-get install -y docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
+# Depot CLI (https://depot.dev) — remote build backend for build.mode=depot
+# (see charts/workspace/values.yaml). Only exercised when a workspace opts
+# into that mode; harmless (a few MB) to ship unconditionally otherwise.
+# Pinned for reproducible builds; bump DEPOT_CLI_VERSION (a depot/cli release
+# tag) + rebuild to update.
+ARG DEPOT_CLI_VERSION=v2.101.74
+RUN curl -fsSL https://depot.dev/install-cli.sh \
+    | DEPOT_INSTALL_DIR=/usr/local/bin sh -s ${DEPOT_CLI_VERSION}
+
 # Install standalone docker-compose for compatibility.
 # Pinned for reproducible builds — Renovate bumps COMPOSE_VERSION weekly
 # (github-releases datasource: docker/compose). To bump manually: edit + rebuild.

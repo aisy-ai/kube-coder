@@ -1,0 +1,72 @@
+{{- if eq .Values.build.mode "depot" }}
+# Depot (https://depot.dev) build mode: image builds run on Depot's remote
+# builders instead of a local Kaniko Job or a privileged dind sidecar — no
+# Job RBAC, no dind, no PVC access from the builder. This ConfigMap is
+# mounted at BOTH /usr/local/bin/docker-build (mirrors the kaniko/buildkit
+# convention — see configmaps.yaml) and /usr/local/bin/docker (depot mode has
+# no daemon at all, so this wrapper IS "docker" for the workspace shell).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: depot-wrapper
+  namespace: {{ .Values.namespace }}
+data:
+  docker-build: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    usage() { echo "Usage: docker-build -t <image:tag> [--file Dockerfile] [context]"; exit 1; }
+
+    PROG="$(basename "$0")"
+
+    # Mounted as /usr/local/bin/docker too (no daemon in depot mode, so this
+    # wrapper IS docker for the workspace shell). Only `docker build` is
+    # wired to Depot; everything else that needs a real daemon (run, compose,
+    # ...) fails fast with a clear message instead of "connection refused".
+    if [[ "$PROG" == "docker" ]]; then
+      SUBCMD="${1:-}"
+      case "$SUBCMD" in
+        build) shift ;;
+        ""|-*) usage ;;
+        *)
+          echo "docker: '$SUBCMD' is not supported in depot build mode (image builds only — no daemon, no 'docker run'/'docker compose'). Switch build.mode to buildkit if you need it." >&2
+          exit 2
+          ;;
+      esac
+    fi
+
+    DEST=""
+    DOCKERFILE="Dockerfile"
+    CTX="."
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -t|--tag) DEST="$2"; shift 2;;
+        --file|-f) DOCKERFILE="$2"; shift 2;;
+        *) CTX="$1"; shift;;
+      esac
+    done
+
+    # Reject shell / YAML metachars before any value reaches the depot CLI —
+    # same defense-in-depth the kaniko wrapper applies (see configmaps.yaml).
+    _validate() {
+      local name="$1" val="$2"
+      if [[ ! "$val" =~ ^[A-Za-z0-9._/:@+-]+$ ]]; then
+        echo "docker-build: refusing unsafe characters in $name: $val" >&2
+        exit 2
+      fi
+    }
+    [[ -n "$DEST" ]] && _validate DEST "$DEST"
+    _validate DOCKERFILE "$DOCKERFILE"
+    _validate CTX "$CTX"
+
+    : "${DEPOT_PROJECT_ID:?DEPOT_PROJECT_ID is not set — set build.depot.projectId in values.yaml}"
+    : "${DEPOT_TOKEN:?DEPOT_TOKEN is not set — set build.depot.tokenSecretName in values.yaml}"
+
+    DEPOT_ARGS=(build --project "$DEPOT_PROJECT_ID" --file "$DOCKERFILE")
+    if [[ -n "$DEST" ]]; then
+      DEPOT_ARGS+=(--tag "$DEST" --push)
+    fi
+    DEPOT_ARGS+=("$CTX")
+
+    echo "Running: depot ${DEPOT_ARGS[*]}"
+    exec depot "${DEPOT_ARGS[@]}"
+{{- end }}

@@ -283,12 +283,24 @@ controller:
 #     `docker run` from the user's shell, but a shell in either container
 #     can escape to the underlying node. On a shared multi-tenant cluster
 #     prefer `kaniko` unless `docker run` is required.
+#
+#   mode: depot
+#     Image builds run on Depot's (https://depot.dev) remote builders instead
+#     of a local Kaniko Job or a privileged dind sidecar: no Job RBAC, no
+#     dind, no PVC access from the builder. `docker build`/`docker-build`
+#     from the user's shell are wired to `depot build`; `docker run`/`docker
+#     compose` are NOT available (no daemon at all in this mode). Requires
+#     base-infrastructure's own `build.mode` also set to `depot` (it renders
+#     the depot-wrapper ConfigMap this chart mounts).
 build:
   mode: kaniko
   # Pinned for reproducible builds; Renovate bumps the tag+digest weekly.
   kanikoImage: gcr.io/kaniko-project/executor:v1.24.0
   pushSecretName: regcred
   defaultDestinationRepo: registry.digitalocean.com/resourceloop/coder
+  depot:
+    projectId: ""         # Depot project id (build.mode=depot only)
+    tokenSecretName: ""   # Secret with key `depot-token` (build.mode=depot only)
 
 # SSH server configuration. When enabled, an `ssh-server` sidecar runs in
 # the workspace pod (root, port 22, shares the home PVC). Access via

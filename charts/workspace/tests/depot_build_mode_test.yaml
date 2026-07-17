@@ -1,0 +1,135 @@
+suite: build.mode=depot — depot-wrapper mount + DEPOT_TOKEN/DEPOT_PROJECT_ID env
+templates:
+  - templates/deployment.yaml
+  - templates/browser-configmap.yaml
+  - templates/claude-configmap.yaml
+  - templates/terminal-entry-configmap.yaml
+  - templates/workspace-entrypoint-configmap.yaml
+values:
+  - test-values.yaml
+tests:
+  - it: kaniko (default) mounts the kaniko-wrapper ConfigMap, not depot-wrapper
+    template: templates/deployment.yaml
+    set:
+      build.mode: kaniko
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: kaniko-wrapper
+            configMap:
+              name: kaniko-wrapper
+              defaultMode: 365
+      - notContains:
+          path: spec.template.spec.volumes
+          any: true
+          content:
+            name: depot-wrapper
+
+  - it: depot mode mounts the depot-wrapper ConfigMap instead of kaniko-wrapper
+    template: templates/deployment.yaml
+    set:
+      build.mode: depot
+      build.depot.projectId: proj123
+      build.depot.tokenSecretName: kc-depot-token
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: depot-wrapper
+            configMap:
+              name: depot-wrapper
+              defaultMode: 365
+      - notContains:
+          path: spec.template.spec.volumes
+          any: true
+          content:
+            name: kaniko-wrapper
+
+  - it: depot mode mounts the wrapper at both docker-build and docker
+    template: templates/deployment.yaml
+    set:
+      build.mode: depot
+      build.depot.projectId: proj123
+      build.depot.tokenSecretName: kc-depot-token
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: depot-wrapper
+            mountPath: /usr/local/bin/docker-build
+            subPath: docker-build
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: depot-wrapper
+            mountPath: /usr/local/bin/docker
+            subPath: docker-build
+
+  - it: depot mode injects DEPOT_TOKEN + DEPOT_PROJECT_ID from values
+    template: templates/deployment.yaml
+    set:
+      build.mode: depot
+      build.depot.projectId: proj123
+      build.depot.tokenSecretName: kc-depot-token
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DEPOT_PROJECT_ID
+            value: "proj123"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DEPOT_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: kc-depot-token
+                key: depot-token
+
+  - it: depot mode has no dind sidecar
+    template: templates/deployment.yaml
+    set:
+      build.mode: depot
+      build.depot.projectId: proj123
+      build.depot.tokenSecretName: kc-depot-token
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers
+          any: true
+          content:
+            name: dind
+
+  - it: depot mode fails closed when build.depot.projectId is missing
+    template: templates/deployment.yaml
+    set:
+      build.mode: depot
+      build.depot.tokenSecretName: kc-depot-token
+    asserts:
+      - failedTemplate:
+          errorMessage: "build.depot.projectId is required when build.mode=depot"
+
+  - it: depot mode fails closed when build.depot.tokenSecretName is missing
+    template: templates/deployment.yaml
+    set:
+      build.mode: depot
+      build.depot.projectId: proj123
+    asserts:
+      - failedTemplate:
+          errorMessage: "build.depot.tokenSecretName is required when build.mode=depot"
+
+  - it: kaniko mode injects no DEPOT_* env vars
+    template: templates/deployment.yaml
+    set:
+      build.mode: kaniko
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: DEPOT_PROJECT_ID
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: DEPOT_TOKEN
