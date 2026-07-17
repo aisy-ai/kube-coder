@@ -19,6 +19,17 @@ via the `proxy-set-headers` annotation (which is *not* a snippet and
 is allowed).
 */}}
 
+{{/* oauth2 auth_request URL for the nginx auth-url annotation. "external"
+(default) is byte-identical to upstream; "internal" targets the in-cluster
+oauth2-proxy Service directly (see ingress.oauth2AuthMode in values.yaml). */}}
+{{- define "workspace.oauth2AuthUrl" -}}
+{{- if eq .Values.ingress.oauth2AuthMode "internal" -}}
+http://oauth2-proxy-{{ .Values.user.name }}.{{ .Values.namespace }}.svc.cluster.local:4180/oauth2/auth
+{{- else -}}
+https://$host/oauth2/auth
+{{- end -}}
+{{- end -}}
+
 {{/* Extra annotations merged into every Ingress this chart renders. Empty by
 default -> renders nothing (byte-identical to upstream). Caller nindents this
 to the annotations block's indent level (nindent replaces every internal

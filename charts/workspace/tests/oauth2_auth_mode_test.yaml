@@ -1,0 +1,66 @@
+suite: ingress.oauth2AuthMode — external (default) vs internal auth_request URL
+# nginx's auth_request subrequest normally re-enters the public hostname
+# (https://$host/oauth2/auth), which round-trips through the edge/ALB for
+# every request. oauth2AuthMode=internal points that subrequest straight at
+# the in-cluster oauth2-proxy Service instead. auth-signin (the browser
+# redirect target) and auth-response-headers must NOT change either way.
+templates:
+  - templates/ingress-oauth2.yaml
+values:
+  - test-values.yaml
+set:
+  ingress.auth.type: oauth2
+  oauth2.cookieSecret: cs
+  oauth2.clientId: cid
+  oauth2.clientSecret: csec
+tests:
+  - it: defaults to the external auth-url (byte-identical to upstream)
+    documentSelector:
+      path: metadata.name
+      value: ws-testuser-oauth2
+    asserts:
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/auth-url"]
+          value: "https://$host/oauth2/auth"
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/auth-signin"]
+          value: "https://$host/oauth2/start?rd=$escaped_request_uri"
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/auth-response-headers"]
+          value: "x-auth-request-user,x-auth-request-email,x-auth-request-access-token"
+
+  - it: internal mode points auth-url at the in-cluster oauth2-proxy Service
+    set:
+      ingress.oauth2AuthMode: internal
+    documentSelector:
+      path: metadata.name
+      value: ws-testuser-oauth2
+    asserts:
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/auth-url"]
+          value: "http://oauth2-proxy-testuser.test.svc.cluster.local:4180/oauth2/auth"
+
+  - it: internal mode does NOT change auth-signin or auth-response-headers
+    set:
+      ingress.oauth2AuthMode: internal
+    documentSelector:
+      path: metadata.name
+      value: ws-testuser-oauth2
+    asserts:
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/auth-signin"]
+          value: "https://$host/oauth2/start?rd=$escaped_request_uri"
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/auth-response-headers"]
+          value: "x-auth-request-user,x-auth-request-email,x-auth-request-access-token"
+
+  - it: internal mode applies to every oauth2-gated Ingress, not just the first
+    set:
+      ingress.oauth2AuthMode: internal
+    documentSelector:
+      path: metadata.name
+      value: ws-testuser-oauth2-websocket
+    asserts:
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/auth-url"]
+          value: "http://oauth2-proxy-testuser.test.svc.cluster.local:4180/oauth2/auth"

@@ -63,6 +63,15 @@ ingress:
   # alb.ingress.kubernetes.io/* passthrough markers) without patching each
   # template. Empty by default -> no change to rendered annotations.
   extraAnnotations: {}
+  # nginx's oauth2 auth_request subrequest normally re-enters the public
+  # hostname (https://$host/oauth2/auth) — fine on DigitalOcean/upstream, but
+  # on an edge that terminates TLS in front of ingress-nginx (ALB, Cloudflare)
+  # that subrequest round-trips back out through the edge for every request.
+  # "internal" points auth-url at the in-cluster oauth2-proxy Service instead;
+  # auth-signin (the browser's redirect target) is unaffected either way — it
+  # must stay externally reachable. Default "external" is byte-identical to
+  # upstream.
+  oauth2AuthMode: external
   # Emit a configuration-snippet on the Bearer-API ingress that strips identity
   # headers at the edge. Only enable on clusters whose ingress-nginx allows
   # snippet annotations — with snippets disabled (this cluster: CVE-2021-25742
