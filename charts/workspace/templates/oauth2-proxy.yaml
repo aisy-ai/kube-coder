@@ -1,8 +1,10 @@
 {{- if eq .Values.ingress.auth.type "oauth2" }}
+{{- $oauth2SecretName := .Values.oauth2.existingSecretName | default (printf "oauth2-proxy-secrets-%s" .Values.user.name) }}
+{{- if not .Values.oauth2.existingSecretName }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: oauth2-proxy-secrets-{{ .Values.user.name }}
+  name: {{ $oauth2SecretName }}
   namespace: {{ .Values.namespace }}
 type: Opaque
 stringData:
@@ -10,6 +12,7 @@ stringData:
   client-id: {{ required "oauth2.clientId is required when ingress.auth.type=oauth2" .Values.oauth2.clientId | quote }}
   client-secret: {{ required "oauth2.clientSecret is required when ingress.auth.type=oauth2" .Values.oauth2.clientSecret | quote }}
 ---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -91,17 +94,17 @@ spec:
         - name: OAUTH2_PROXY_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: oauth2-proxy-secrets-{{ .Values.user.name }}
+              name: {{ $oauth2SecretName }}
               key: client-id
         - name: OAUTH2_PROXY_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
-              name: oauth2-proxy-secrets-{{ .Values.user.name }}
+              name: {{ $oauth2SecretName }}
               key: client-secret
         - name: OAUTH2_PROXY_COOKIE_SECRET
           valueFrom:
             secretKeyRef:
-              name: oauth2-proxy-secrets-{{ .Values.user.name }}
+              name: {{ $oauth2SecretName }}
               key: cookie-secret
         ports:
         - containerPort: 4180

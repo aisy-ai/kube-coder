@@ -109,6 +109,12 @@ oauth2:
   cookieSecret: ""        # 16/24/32 random bytes, base64-encoded
   clientId: ""            # GitHub OAuth App client id
   clientSecret: ""        # GitHub OAuth App client secret
+  # Bring your own Secret (e.g. synced by External Secrets Operator) instead
+  # of the inline stringData Secret below — must expose keys client-id,
+  # client-secret, cookie-secret. When set, the chart renders no oauth2
+  # Secret of its own and the cookieSecret/clientId/clientSecret `required`
+  # guards below are skipped (their values are ignored).
+  existingSecretName: ""
   githubUsers: ""         # comma-separated allowlist (optional)
   githubOrg: ""           # restrict to org members (optional)
   githubTeam: ""          # restrict to team slug (optional)

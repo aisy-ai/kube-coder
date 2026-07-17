@@ -116,6 +116,12 @@ oauth2:
   cookieSecret: ""   # 32 chars: openssl rand -base64 64 | tr -d '\n=+/' | head -c 32
   clientId: ""
   clientSecret: ""
+  # Bring your own Secret (e.g. synced by External Secrets Operator) instead
+  # of the inline stringData Secret below — must expose keys client-id,
+  # client-secret, cookie-secret. When set, the chart renders no oauth2
+  # Secret of its own and the cookieSecret/clientId/clientSecret `required`
+  # guards below are skipped (their values are ignored).
+  existingSecretName: ""
   # THE access gate — comma-separated GitHub usernames allowed to sign in.
   githubUsers: ""
   githubOrg: ""
