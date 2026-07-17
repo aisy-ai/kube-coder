@@ -1,0 +1,87 @@
+suite: egress NetworkPolicy (opt-in DNS + internet-except-RFC1918 allowlist)
+templates:
+  - templates/networkpolicy.yaml
+values:
+  - test-values.yaml
+tests:
+  - it: disabled by default -> byte-identical to upstream (Ingress-only, no egress key)
+    asserts:
+      - equal:
+          path: spec.policyTypes
+          value:
+            - Ingress
+      - notExists:
+          path: spec.egress
+
+  - it: enabled adds Egress to policyTypes
+    set:
+      networkPolicy.egress.enabled: true
+    asserts:
+      - equal:
+          path: spec.policyTypes
+          value:
+            - Ingress
+            - Egress
+
+  - it: enabled allows DNS (UDP+TCP 53) to kube-system
+    set:
+      networkPolicy.egress.enabled: true
+    asserts:
+      - equal:
+          path: spec.egress[0].to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
+          value: kube-system
+      - contains:
+          path: spec.egress[0].ports
+          content:
+            protocol: UDP
+            port: 53
+      - contains:
+          path: spec.egress[0].ports
+          content:
+            protocol: TCP
+            port: 53
+
+  - it: enabled allows 0.0.0.0/0 except the private/link-local ranges
+    set:
+      networkPolicy.egress.enabled: true
+    asserts:
+      - equal:
+          path: spec.egress[1].to[0].ipBlock.cidr
+          value: 0.0.0.0/0
+      - equal:
+          path: spec.egress[1].to[0].ipBlock.except
+          value:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - 169.254.0.0/16
+
+  - it: extraRules are appended verbatim after the built-in rules
+    set:
+      networkPolicy.egress.enabled: true
+      networkPolicy.egress.extraRules:
+        - to:
+            - podSelector:
+                matchLabels:
+                  app: workspace-controller
+          ports:
+            - protocol: TCP
+              port: 8081
+    asserts:
+      - equal:
+          path: spec.egress[2].to[0].podSelector.matchLabels.app
+          value: workspace-controller
+      - equal:
+          path: spec.egress[2].ports[0].port
+          value: 8081
+
+  - it: extraRules alone (egress disabled) render nothing — the flag gates everything
+    set:
+      networkPolicy.egress.extraRules:
+        - to:
+            - podSelector:
+                matchLabels:
+                  app: workspace-controller
+    asserts:
+      - notExists:
+          path: spec.egress

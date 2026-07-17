@@ -239,6 +239,22 @@ quota:
     defaultLimitCpu: "1"
     defaultLimitMemory: 1Gi
 
+# Egress NetworkPolicy (opt-in). Off by default — Egress is intentionally
+# NOT restricted upstream (see templates/networkpolicy.yaml's own comment);
+# tightening it requires a per-cluster allowlist. When enabled, the SAME
+# NetworkPolicy that already scopes ingress to ws-<user> (+ oauth2-proxy)
+# also gets an egress allowlist: DNS to kube-system, and everything else
+# EXCEPT the private/link-local ranges (so pods can still reach GitHub,
+# registries, model providers — just not other in-cluster/VPC services).
+networkPolicy:
+  egress:
+    enabled: false
+    # Additional NetworkPolicyEgressRule entries appended verbatim after the
+    # built-in DNS + internet-except-private-ranges rules (e.g. an explicit
+    # allow to the workspace-controller's self-serve port). Ignored unless
+    # egress.enabled is also true.
+    extraRules: []
+
 # Cross-namespace access for the workspace-controller admin console. With
 # per-workspace namespaces the controller runs in its own control-plane
 # namespace and reaches this workspace via a RoleBinding the chart renders here

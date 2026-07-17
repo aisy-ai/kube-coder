@@ -18,11 +18,13 @@ Each workspace's pods only need to reach the outside world (GitHub,
 registries, model providers) and their own sidecars on localhost —
 neither is affected by this policy.
 
-Egress is intentionally NOT restricted here. Tightening egress requires
-a per-cluster allowlist (kube-dns, kube-apiserver, registries, model
-providers, GitHub) and is best layered in a follow-up once traffic
-patterns are confirmed in prod. CNI is Cilium so adding egress rules
-later is straightforward.
+Egress is unrestricted by default (networkPolicy.egress.enabled: false) —
+tightening it needs a per-cluster allowlist decision, so it's opt-in rather
+than forced on every deployer. When enabled: DNS (kube-system) + everything
+else except the private/link-local ranges, so pods can still reach GitHub,
+registries, and model providers but not other in-cluster/VPC services —
+plus networkPolicy.egress.extraRules for anything cluster-specific (e.g. an
+explicit allow to the workspace-controller's self-serve port).
 */}}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -43,8 +45,34 @@ spec:
       {{- end }}
   policyTypes:
   - Ingress
+  {{- if .Values.networkPolicy.egress.enabled }}
+  - Egress
+  {{- end }}
   ingress:
   - from:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: ingress-nginx
+  {{- if .Values.networkPolicy.egress.enabled }}
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 169.254.0.0/16
+  {{- with .Values.networkPolicy.egress.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  {{- end }}
