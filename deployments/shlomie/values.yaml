@@ -1,0 +1,20 @@
+# Non-secret Aisy dev workspace identity. Shared cluster/build/network settings
+# come from deployments/aisy-dev/site-values.yaml.
+namespace: ws-shlomie
+
+user:
+  name: shlomie
+  host: shlomie.coder.shadw.stream
+  pvcSize: 50Gi
+  env: []
+
+oauth2:
+  githubUsers: ShlomieLiberow
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    cpu: "4"
+    memory: 8Gi
