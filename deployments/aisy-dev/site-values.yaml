@@ -1,0 +1,47 @@
+# Shared, non-secret Aisy dev-cluster settings. Pass this file to `make deploy`
+# with SITE_VALUES=deployments/aisy-dev/site-values.yaml. User identity, host,
+# and OAuth credentials stay in the per-user values/ExternalSecret.
+
+image:
+  repository: 780193927358.dkr.ecr.eu-west-1.amazonaws.com/kube-coder
+  tag: devlaptop-v1.30.0
+  pullPolicy: Always
+  # EKS nodes pull the runtime image through their node role. This is separate
+  # from kube-coder-ecr, which authenticates user-initiated Depot pushes.
+  pullSecretName: ""
+
+scheduling:
+  nodeSelector:
+    intent: kube-coder
+  tolerations:
+    - key: kube-coder
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+ingress:
+  className: nginx
+  oauth2AuthMode: internal
+  auth:
+    type: oauth2
+  tls:
+    enabled: false
+  extraAnnotations:
+    external-dns.alpha.kubernetes.io/target: gateway.coder.shadw.stream
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+
+oauth2:
+  existingSecretName: kube-coder-oauth2
+
+networkPolicy:
+  egress:
+    enabled: true
+    dnsCIDRs:
+      - 169.254.20.10/32
+
+build:
+  mode: depot
+  defaultDestinationRepo: 780193927358.dkr.ecr.eu-west-1.amazonaws.com/kube-coder-workspaces
+  depot:
+    tokenSecretName: kube-coder-depot
+    registrySecretName: kube-coder-ecr

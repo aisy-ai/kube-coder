@@ -59,6 +59,14 @@ NAMESPACE := coder
 # elsewhere.
 REGCRED_SRC_NAMESPACE ?= $(NAMESPACE)
 
+# Optional non-secret cluster/site overlay. The same file must be passed to the
+# base and workspace charts so build-mode-dependent wrapper ConfigMaps match the
+# workspace that mounts them. DEPOT_PROJECT_ID stays an explicit deploy-time
+# input because Depot assigns it only after the infra stack is applied.
+SITE_VALUES ?=
+DEPOT_PROJECT_ID ?=
+site_flags = $(if $(strip $(SITE_VALUES)),-f $(SITE_VALUES)) $(if $(strip $(DEPOT_PROJECT_ID)),--set build.depot.projectId=$(DEPOT_PROJECT_ID))
+
 # Docker image full name
 IMAGE := $(REGISTRY):$(IMAGE_NAME)-$(VERSION)
 
@@ -113,6 +121,7 @@ clean: ## Clean up local Docker images
 deploy-base: ## Deploy base infrastructure
 	@echo "Deploying base infrastructure..."
 	helm upgrade base-infrastructure ./charts/base-infrastructure \
+		$(call site_flags) \
 		--namespace $(NAMESPACE) \
 		--install \
 		--wait
@@ -199,10 +208,12 @@ deploy: require-user validate-user ## Deploy any user's workspace (USER=<name>);
 	@# the pod mounts) BEFORE the workspace chart lands.
 	@./scripts/ensure-workspace-namespace.sh "$(call ws_namespace,$(USER))" "$(USER)" "$(REGCRED_SRC_NAMESPACE)"
 	helm upgrade base-infrastructure ./charts/base-infrastructure \
+		$(call site_flags) \
 		--namespace $(call ws_namespace,$(USER)) \
 		--set namespace=$(call ws_namespace,$(USER)) \
 		--install
 	helm upgrade $(USER)-workspace ./charts/workspace \
+		$(call site_flags) \
 		-f $(call values_file,$(USER)) \
 		$(call secret_flags,$(USER)) \
 		--namespace $(call ws_namespace,$(USER)) \
