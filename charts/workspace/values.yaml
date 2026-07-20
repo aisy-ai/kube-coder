@@ -249,6 +249,10 @@ quota:
 networkPolicy:
   egress:
     enabled: false
+    # Explicit cluster DNS endpoints that cannot be selected by namespace
+    # labels, notably hostNetwork NodeLocal DNS addresses. Each CIDR receives
+    # only UDP/TCP 53. The kube-system selector remains enabled as a fallback.
+    dnsCIDRs: []
     # Additional NetworkPolicyEgressRule entries appended verbatim after the
     # built-in DNS + internet-except-private-ranges rules (e.g. an explicit
     # allow to the workspace-controller's self-serve port). Ignored unless

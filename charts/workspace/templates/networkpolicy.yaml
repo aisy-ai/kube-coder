@@ -64,6 +64,16 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+  {{- range .Values.networkPolicy.egress.dnsCIDRs }}
+  - to:
+    - ipBlock:
+        cidr: {{ . | quote }}
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  {{- end }}
   - to:
     - ipBlock:
         cidr: 0.0.0.0/0
