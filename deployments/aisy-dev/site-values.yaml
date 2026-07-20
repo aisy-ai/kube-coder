@@ -28,7 +28,8 @@ ingress:
     enabled: false
   extraAnnotations:
     external-dns.alpha.kubernetes.io/target: gateway.coder.shadw.stream
-    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    # DNS-only: clients terminate TLS on the ALB's ACM certificate.
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
 
 oauth2:
   existingSecretName: kube-coder-oauth2

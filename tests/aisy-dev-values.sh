@@ -19,6 +19,11 @@ check_user() {
   grep -F -- "--github-user=$github_login" <<<"$render" >/dev/null
   grep -F -- 'secretName: kube-coder-ecr' <<<"$render" >/dev/null
   grep -F -- 'cidr: "169.254.20.10/32"' <<<"$render" >/dev/null
+  grep -F -- 'external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"' <<<"$render" >/dev/null
+  if grep -F -- 'external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"' <<<"$render" >/dev/null; then
+    echo "workspace $slug must terminate TLS directly on the ACM-backed ALB" >&2
+    exit 1
+  fi
 }
 
 check_user aidan aidan-aisy
