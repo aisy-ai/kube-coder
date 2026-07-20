@@ -87,6 +87,53 @@ tests:
                 name: kc-depot-token
                 key: depot-token
 
+  - it: depot mode mounts registry credentials as Docker config when configured
+    template: templates/deployment.yaml
+    set:
+      build.mode: depot
+      build.depot.projectId: proj123
+      build.depot.tokenSecretName: kc-depot-token
+      build.depot.registrySecretName: kube-coder-ecr
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DOCKER_CONFIG
+            value: /var/run/kube-coder/docker
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: depot-registry
+            mountPath: /var/run/kube-coder/docker
+            readOnly: true
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: depot-registry
+            secret:
+              secretName: kube-coder-ecr
+              items:
+                - key: .dockerconfigjson
+                  path: config.json
+
+  - it: depot mode omits registry credentials when not configured
+    template: templates/deployment.yaml
+    set:
+      build.mode: depot
+      build.depot.projectId: proj123
+      build.depot.tokenSecretName: kc-depot-token
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: DOCKER_CONFIG
+      - notContains:
+          path: spec.template.spec.volumes
+          any: true
+          content:
+            name: depot-registry
+
   - it: depot mode has no dind sidecar
     template: templates/deployment.yaml
     set:

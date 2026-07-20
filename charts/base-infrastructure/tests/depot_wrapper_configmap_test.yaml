@@ -60,3 +60,20 @@ tests:
       - matchRegex:
           path: data["docker-build"]
           pattern: "not supported in depot build mode"
+
+  - it: preserves ordinary docker build arguments while enforcing a pushed tag
+    set:
+      build.mode: depot
+    asserts:
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: 'ORIGINAL_ARGS=\("\$@"\)'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: '--tag=\*'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: 'exec depot build --project "\$DEPOT_PROJECT_ID" "\$\{ORIGINAL_ARGS\[@\]\}" --push'
+      - notMatchRegex:
+          path: data["docker-build"]
+          pattern: 'DEPOT_ARGS='

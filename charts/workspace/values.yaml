@@ -301,6 +301,10 @@ build:
   depot:
     projectId: ""         # Depot project id (build.mode=depot only)
     tokenSecretName: ""   # Secret with key `depot-token` (build.mode=depot only)
+    # Optional kubernetes.io/dockerconfigjson Secret. Its .dockerconfigjson key
+    # is mounted as Docker's config.json so Depot can push to private registries
+    # without exposing cloud-provider credentials to the workspace.
+    registrySecretName: ""
 
 # SSH server configuration. When enabled, an `ssh-server` sidecar runs in
 # the workspace pod (root, port 22, shares the home PVC). Access via

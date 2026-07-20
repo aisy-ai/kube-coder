@@ -84,6 +84,10 @@ spec:
             secretKeyRef:
               name: {{ required "build.depot.tokenSecretName is required when build.mode=depot" .Values.build.depot.tokenSecretName }}
               key: depot-token
+        {{- if .Values.build.depot.registrySecretName }}
+        - name: DOCKER_CONFIG
+          value: /var/run/kube-coder/docker
+        {{- end }}
         {{- end }}
         {{- with .Values.user.env }}
         {{- toYaml . | nindent 8 }}
@@ -305,6 +309,11 @@ spec:
         - name: depot-wrapper
           mountPath: /usr/local/bin/docker
           subPath: docker-build
+        {{- if .Values.build.depot.registrySecretName }}
+        - name: depot-registry
+          mountPath: /var/run/kube-coder/docker
+          readOnly: true
+        {{- end }}
         {{- else }}
         - name: kaniko-wrapper
           mountPath: /usr/local/bin/docker-build
@@ -443,6 +452,14 @@ spec:
         configMap:
           name: depot-wrapper
           defaultMode: 0555
+      {{- if .Values.build.depot.registrySecretName }}
+      - name: depot-registry
+        secret:
+          secretName: {{ .Values.build.depot.registrySecretName }}
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+      {{- end }}
       {{- else }}
       - name: kaniko-wrapper
         configMap:
