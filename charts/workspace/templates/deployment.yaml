@@ -132,6 +132,14 @@ spec:
         - name: KC_ANTIGRAVITY_MODEL
           value: {{ .Values.assistant.antigravity.model | quote }}
         {{- end }}
+        {{- if (.Values.assistant.cursor).model }}
+        - name: KC_CURSOR_MODEL
+          value: {{ .Values.assistant.cursor.model | quote }}
+        {{- end }}
+        {{- if (.Values.assistant.cursor).models }}
+        - name: KC_CURSOR_MODELS
+          value: {{ .Values.assistant.cursor.models | quote }}
+        {{- end }}
         {{- if (.Values.assistant.librefang).agent }}
         - name: KC_LIBREFANG_AGENT
           value: {{ .Values.assistant.librefang.agent | quote }}

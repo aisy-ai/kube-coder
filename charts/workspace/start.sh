@@ -599,6 +599,65 @@ for HOME_DIR in /home/ubuntu; do
   ln -sfn "$GEMINI_TARGET" "$LINK" 2>/dev/null || true
 done
 
+# Cursor CLI (cursor-agent): persist its login + config and keep the binary on
+# the PVC. Cursor keeps CLI state (the `cursor-agent login` session,
+# cli-config.json, chats) under ~/.cursor, so — like ~/.librefang below — one
+# PVC symlink persists data + binary together. /usr/local/bin/cursor-agent is a
+# build-time symlink to the PVC path /home/dev/.cursor/bin/cursor-agent, seeded
+# from the image's /opt/cursor/cursor-agent below (bump the Dockerfile install
+# + rebuild to update). Auth is Cursor-subscription OAuth: each user runs
+# `NO_OPEN_BROWSER=1 cursor-agent login` once in a pod terminal (prints a URL).
+CURSOR_TARGET=/home/dev/.cursor
+mkdir -p "$CURSOR_TARGET/bin"
+if [ -L "$CURSOR_TARGET" ]; then
+  CU=$(readlink "$CURSOR_TARGET")
+  if [ "$CU" = "$CURSOR_TARGET" ] || [ "$CU" = ".cursor" ]; then
+    rm -f "$CURSOR_TARGET"; mkdir -p "$CURSOR_TARGET/bin"
+  fi
+fi
+for HOME_DIR in /home/ubuntu; do
+  [ -d "$HOME_DIR" ] || continue
+  LINK="$HOME_DIR/.cursor"
+  [ "$LINK" = "$CURSOR_TARGET" ] && continue
+  if [ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$CURSOR_TARGET" ]; then
+    continue
+  fi
+  # Merge any existing ~/.cursor (incl. a login done before this shipped) into
+  # the PVC — cp -an keeps the PVC copy canonical — then replace with a symlink.
+  if [ -d "$LINK" ] && [ ! -L "$LINK" ]; then
+    cp -an "$LINK"/. "$CURSOR_TARGET"/ 2>/dev/null || true
+    rm -rf "$LINK"
+  elif [ -e "$LINK" ] || [ -L "$LINK" ]; then
+    rm -f "$LINK"
+  fi
+  ln -sfn "$CURSOR_TARGET" "$LINK" 2>/dev/null || true
+done
+# Seed/refresh the PVC copy of the Cursor runtime from the image. cursor-agent
+# is NOT a single binary: it's a launcher script that execs a bundled node
+# runtime against JS in its own directory (~190MB), so the whole dist dir is
+# the copy unit. The .kc-image-version marker (written by the Dockerfile)
+# gates the copy so boot only pays for it once per image bump; the copy lands
+# in dist.new and is swapped in so a crash mid-copy can't strand a half-seeded
+# runtime. The launcher realpath-resolves its own dir, so the symlink chain
+# (/usr/local/bin/cursor-agent -> $CURSOR_TARGET/bin/cursor-agent ->
+# $CURSOR_TARGET/dist/cursor-agent) executes out of dist/ correctly.
+if [ -d /opt/cursor/dist ]; then
+  CURSOR_IMG_VER=$(cat /opt/cursor/dist/.kc-image-version 2>/dev/null || echo image)
+  CURSOR_PVC_VER=$(cat "$CURSOR_TARGET/dist/.kc-image-version" 2>/dev/null || echo none)
+  if [ "$CURSOR_IMG_VER" != "$CURSOR_PVC_VER" ] || [ ! -x "$CURSOR_TARGET/dist/cursor-agent" ]; then
+    rm -rf "$CURSOR_TARGET/dist.new" 2>/dev/null || true
+    if cp -a /opt/cursor/dist "$CURSOR_TARGET/dist.new" 2>/dev/null; then
+      rm -rf "$CURSOR_TARGET/dist.old" 2>/dev/null || true
+      if [ -d "$CURSOR_TARGET/dist" ]; then
+        mv "$CURSOR_TARGET/dist" "$CURSOR_TARGET/dist.old" 2>/dev/null || true
+      fi
+      mv "$CURSOR_TARGET/dist.new" "$CURSOR_TARGET/dist" 2>/dev/null || true
+      rm -rf "$CURSOR_TARGET/dist.old" 2>/dev/null || true
+    fi
+  fi
+  ln -sfn "$CURSOR_TARGET/dist/cursor-agent" "$CURSOR_TARGET/bin/cursor-agent" 2>/dev/null || true
+fi
+
 # Persist LibreFang's home across pod restarts — same pattern as ~/.ante
 # above. LibreFang keeps everything (config.toml, agents, sessions, the
 # registry cache, and the binary at bin/librefang) under ~/.librefang, so

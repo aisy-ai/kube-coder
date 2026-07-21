@@ -280,6 +280,11 @@ so orchestration can't fork-bomb the pod or run away on API spend.
   ONCE in a terminal to sign in (creds persist on the PVC under `~/.codex`);
   after that it works as a Hypervisor driver, a Build-tab REPL, and a
   `spawn_agent(assistant="codex")` sub-agent, same as Claude. No API key.
+- `cursor` — Cursor (pre-installed; the only route to Cursor's Composer
+  models, plus Grok and others). Cursor-subscription OAuth — run
+  `NO_OPEN_BROWSER=1 cursor-agent login` ONCE in a terminal (prints a URL to
+  open on your own machine; state persists on the PVC under `~/.cursor`);
+  after that it works everywhere Codex does. No API key.
 - `librefang` — LibreFang agent OS (pre-installed; talks to its registry
   `coder` agent and reuses whatever provider key is in the environment)
 - `opencode-openrouter` — OpenCode via OpenRouter

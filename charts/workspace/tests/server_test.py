@@ -338,6 +338,45 @@ class AssistantSelectionTests(unittest.TestCase):
             "agy --model gemini-3-pro",
         )
 
+    def test_cursor_listed_when_binary_present(self):
+        # Cursor is subscription OAuth (no API key); listed only when the
+        # cursor-agent binary is resolvable. Not listed when it isn't …
+        with mock.patch('server.shutil.which', return_value=None):
+            ids = [a['id'] for a in server.ClaudeTaskManager.available_assistants()]
+            self.assertNotIn('cursor', ids)
+        # … listed once the CLI is present.
+        with mock.patch('server.shutil.which',
+                        side_effect=lambda c: '/usr/local/bin/cursor-agent'
+                        if c == 'cursor-agent' else None):
+            match = [a for a in server.ClaudeTaskManager.available_assistants()
+                     if a['id'] == 'cursor']
+            self.assertEqual(len(match), 1)
+            self.assertEqual(match[0]['label'], 'Cursor')
+
+    def test_resolve_cursor_requires_binary(self):
+        with mock.patch('server.shutil.which', return_value=None):
+            self.assertEqual(server.ClaudeTaskManager.resolve_assistant('cursor'), 'claude')
+        with mock.patch('server.shutil.which',
+                        side_effect=lambda c: '/usr/local/bin/cursor-agent'
+                        if c == 'cursor-agent' else None):
+            self.assertEqual(server.ClaudeTaskManager.resolve_assistant('cursor'), 'cursor')
+
+    def test_command_cursor_repl_and_auto_approve(self):
+        os.environ.pop('KC_CURSOR_MODEL', None)
+        self.assertEqual(server.ClaudeTaskManager.assistant_command('cursor'),
+                         'cursor-agent')
+        # auto_approve REPL uses --force (skip command approvals); the pod is
+        # externally sandboxed (k8s), same rationale as codex's bypass flag.
+        self.assertEqual(
+            server.ClaudeTaskManager.assistant_command('cursor', auto_approve=True),
+            'cursor-agent --force',
+        )
+        os.environ['KC_CURSOR_MODEL'] = 'grok-4.5'
+        self.assertEqual(
+            server.ClaudeTaskManager.assistant_command('cursor', auto_approve=True),
+            'cursor-agent --force --model grok-4.5',
+        )
+
     def test_kc_harness_listed_when_fallback_env_set(self):
         # kc-harness is the third assistant; appears whenever an Ollama-style
         # endpoint is wired via KC_FALLBACK_BASE_URL. Replaces the retired
@@ -532,6 +571,28 @@ class HypervisorModelSelectionTests(unittest.TestCase):
         self.assertEqual(
             server.ClaudeTaskManager.available_models('codex'),
             ['gpt-5-codex', 'o4-mini'],
+        )
+
+    def test_cursor_ships_composer_and_grok_defaults(self):
+        # Unlike codex/antigravity, cursor ships a built-in switcher list —
+        # Composer is Cursor-exclusive (no public API), so surfacing it IS the
+        # feature. KC_CURSOR_MODEL reorders the default to the front;
+        # KC_CURSOR_MODELS replaces the list outright.
+        os.environ.pop('KC_CURSOR_MODEL', None)
+        os.environ.pop('KC_CURSOR_MODELS', None)
+        self.assertEqual(
+            server.ClaudeTaskManager.available_models('cursor'),
+            ['composer-2.5', 'grok-4.5', 'auto'],
+        )
+        os.environ['KC_CURSOR_MODEL'] = 'grok-4.5'
+        self.assertEqual(
+            server.ClaudeTaskManager.available_models('cursor'),
+            ['grok-4.5', 'composer-2.5', 'auto'],
+        )
+        os.environ['KC_CURSOR_MODELS'] = 'composer-2.5, gpt-5.5'
+        self.assertEqual(
+            server.ClaudeTaskManager.available_models('cursor'),
+            ['composer-2.5', 'gpt-5.5'],
         )
 
     def test_non_model_assistant_has_empty_list(self):

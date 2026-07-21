@@ -1,0 +1,76 @@
+suite: cursor assistant wiring
+# Cursor's CLI (cursor-agent) is subscription-OAuth like codex/agy: the binary
+# is seeded from the image onto the PVC (the pod blocks runtime sudo) and
+# ~/.cursor — auth, config, chats — must live on the PVC or the one-time
+# `cursor-agent login` is wiped with the ephemeral /home/ubuntu on restart.
+templates:
+  - templates/deployment.yaml
+  - templates/browser-configmap.yaml
+  - templates/claude-configmap.yaml
+  - templates/terminal-entry-configmap.yaml
+  - templates/workspace-entrypoint-configmap.yaml
+  - templates/assistant-secret.yaml
+  - templates/ssh-server-configmap.yaml
+values:
+  - test-values.yaml
+tests:
+  - it: seeds the cursor-agent dist dir from the image onto the PVC in start.sh
+    template: templates/workspace-entrypoint-configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["start.sh"]
+          pattern: "CURSOR_TARGET=/home/dev/.cursor"
+      # cursor-agent is a launcher + bundled node runtime + JS dist — the whole
+      # dir is the copy unit, gated on a version marker so boot pays for the
+      # ~190MB copy only once per image bump.
+      - matchRegex:
+          path: data["start.sh"]
+          pattern: 'cp -a /opt/cursor/dist "\$CURSOR_TARGET/dist.new"'
+      - matchRegex:
+          path: data["start.sh"]
+          pattern: "kc-image-version"
+      - matchRegex:
+          path: data["start.sh"]
+          pattern: 'ln -sfn "\$CURSOR_TARGET/dist/cursor-agent" "\$CURSOR_TARGET/bin/cursor-agent"'
+
+  - it: symlinks the ephemeral ~/.cursor onto the PVC target in start.sh
+    template: templates/workspace-entrypoint-configmap.yaml
+    asserts:
+      # Migrate any pre-existing login once (no-clobber), then symlink.
+      - matchRegex:
+          path: data["start.sh"]
+          pattern: 'cp -an "\$LINK"/\. "\$CURSOR_TARGET"/'
+      - matchRegex:
+          path: data["start.sh"]
+          pattern: 'ln -sfn "\$CURSOR_TARGET" "\$LINK"'
+
+  - it: open-source defaults inject no cursor env vars
+    template: templates/deployment.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: KC_CURSOR_MODEL
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: KC_CURSOR_MODELS
+
+  - it: injects the cursor model default and switcher list when set
+    template: templates/deployment.yaml
+    set:
+      assistant.cursor.model: "grok-4.5"
+      assistant.cursor.models: "composer-2.5,grok-4.5"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KC_CURSOR_MODEL
+            value: "grok-4.5"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KC_CURSOR_MODELS
+            value: "composer-2.5,grok-4.5"
