@@ -91,13 +91,24 @@ PULL_SECRET_CONFIGURED=1
 if [ ! -d "$CHART" ]; then
   fail "workspace chart missing at $CHART"
 else
-  HELM_F=(-f "$VALUES")
+  # Render the exact same value layers as `make deploy`: shared/site values,
+  # per-user values, per-user secret overlays, then the deploy-time Depot
+  # project ID. Omitting SITE_VALUES makes an OAuth2 site fall back to the
+  # chart's basic-auth default and produces a false validation failure.
+  HELM_F=()
+  if [ -n "${SITE_VALUES:-}" ]; then
+    HELM_F+=(-f "$SITE_VALUES")
+  fi
+  HELM_F+=(-f "$VALUES")
   # Workspaces without any secrets/*.yaml (e.g. the sentinel `locked`
   # workspace) leave SECRET_FILES empty; under `set -u`, expanding an
   # empty array with [@] raises an error, so guard with :-.
   for f in "${SECRET_FILES[@]:-}"; do
     [ -n "$f" ] && HELM_F+=(-f "$f")
   done
+  if [ -n "${DEPOT_PROJECT_ID:-}" ]; then
+    HELM_F+=(--set "build.depot.projectId=$DEPOT_PROJECT_ID")
+  fi
   RENDER_OUT=$(helm template validate-preview "$CHART" "${HELM_F[@]}" 2>&1)
   RENDER_RC=$?
   if [ "$RENDER_RC" -ne 0 ]; then

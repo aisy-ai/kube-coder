@@ -16,6 +16,7 @@ check_user() {
 
   grep -F -- "namespace: ws-$slug" <<<"$render" >/dev/null
   grep -F -- "host: $slug.coder.shadw.stream" <<<"$render" >/dev/null
+  grep -F -- 'image: "780193927358.dkr.ecr.eu-west-1.amazonaws.com/kube-coder:devlaptop-v1.35.0"' <<<"$render" >/dev/null
   grep -F -- "--github-user=$github_login" <<<"$render" >/dev/null
   grep -F -- 'secretName: kube-coder-ecr' <<<"$render" >/dev/null
   grep -F -- 'cidr: "169.254.20.10/32"' <<<"$render" >/dev/null
@@ -28,3 +29,13 @@ check_user() {
 
 check_user aidan aidan-aisy
 check_user shlomie ShlomieLiberow
+
+# The pre-deploy validator must render with the same site overlay and
+# deploy-time Depot project ID that `make deploy` passes to Helm. Otherwise it
+# falls back to the chart's basic-auth defaults and rejects this OAuth2 setup.
+validate_output="$(
+  SITE_VALUES="$site" \
+    DEPOT_PROJECT_ID=test-project-id \
+    "$repo_root/scripts/validate-user.sh" aidan
+)"
+grep -F -- 'validate-user: OK' <<<"$validate_output" >/dev/null
