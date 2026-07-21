@@ -54,7 +54,7 @@ cat > "secrets/$USERNAME/oauth2.yaml" << EOF
 # OAuth2 secrets for $USERNAME
 # IMPORTANT: Add this file to .gitignore
 oauth2:
-  cookieSecret: "$(openssl rand -base64 32)"
+  cookieSecret: "$(openssl rand -hex 16)"
   clientId: "YOUR_GITHUB_OAUTH_APP_CLIENT_ID"
   clientSecret: "YOUR_GITHUB_OAUTH_APP_CLIENT_SECRET"
 EOF

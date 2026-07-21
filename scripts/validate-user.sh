@@ -91,13 +91,24 @@ PULL_SECRET_CONFIGURED=1
 if [ ! -d "$CHART" ]; then
   fail "workspace chart missing at $CHART"
 else
-  HELM_F=(-f "$VALUES")
+  # Render the exact same value layers as `make deploy`: shared/site values,
+  # per-user values, per-user secret overlays, then the deploy-time Depot
+  # project ID. Omitting SITE_VALUES makes an OAuth2 site fall back to the
+  # chart's basic-auth default and produces a false validation failure.
+  HELM_F=()
+  if [ -n "${SITE_VALUES:-}" ]; then
+    HELM_F+=(-f "$SITE_VALUES")
+  fi
+  HELM_F+=(-f "$VALUES")
   # Workspaces without any secrets/*.yaml (e.g. the sentinel `locked`
   # workspace) leave SECRET_FILES empty; under `set -u`, expanding an
   # empty array with [@] raises an error, so guard with :-.
   for f in "${SECRET_FILES[@]:-}"; do
     [ -n "$f" ] && HELM_F+=(-f "$f")
   done
+  if [ -n "${DEPOT_PROJECT_ID:-}" ]; then
+    HELM_F+=(--set "build.depot.projectId=$DEPOT_PROJECT_ID")
+  fi
   RENDER_OUT=$(helm template validate-preview "$CHART" "${HELM_F[@]}" 2>&1)
   RENDER_RC=$?
   if [ "$RENDER_RC" -ne 0 ]; then
@@ -121,8 +132,8 @@ else
     fi
 
     # cookieSecret length check on merged value. Find `cookie-secret:` in the
-    # rendered Secret manifest. oauth2-proxy accepts raw 16/24/32 bytes or
-    # their urlsafe base64-encoded forms (24/32/44 chars).
+    # rendered Secret manifest. The chart passes this string directly to
+    # oauth2-proxy, so it must itself be exactly 16, 24, or 32 bytes.
     COOKIE=$(echo "$RENDER_OUT" \
       | awk -F'"' '/^[[:space:]]*cookie-secret:[[:space:]]*"/{print $2; exit}')
     if [ -z "$COOKIE" ]; then
@@ -130,8 +141,8 @@ else
     else
       COOKIE_LEN=${#COOKIE}
       case "$COOKIE_LEN" in
-        16|24|32|44) pass "cookieSecret present ($COOKIE_LEN chars, merged)" ;;
-        *) fail "cookieSecret is $COOKIE_LEN chars; oauth2-proxy needs 16/24/32 (raw) or 24/32/44 (base64). Regenerate: openssl rand -base64 32" ;;
+        16|24|32) pass "cookieSecret present ($COOKIE_LEN chars, merged)" ;;
+        *) fail "cookieSecret is $COOKIE_LEN chars; oauth2-proxy needs exactly 16, 24, or 32 raw characters. Regenerate: openssl rand -hex 16" ;;
       esac
     fi
   fi

@@ -60,10 +60,9 @@ mkdir -p "$USER_DIR/secrets"
 # *exactly* 16, 24, or 32 characters long (it's used directly as an AES
 # key — the chars themselves are the key bytes). Raw `openssl rand -base64
 # 32` produces a 44-char b64 string that oauth2-proxy rejects with
-# "must be 16, 24, or 32 bytes to create an AES cipher". Strip the b64
-# padding/special chars and trim to exactly 32 — gives ~190 bits of
-# entropy, well above any sane threshold.
-COOKIE_SECRET=$(openssl rand -base64 64 | tr -d '\n=+/' | head -c 32)
+# "must be 16, 24, or 32 bytes to create an AES cipher". Sixteen random bytes
+# rendered as hex produce an exact 32-character key with 128 bits of entropy.
+COOKIE_SECRET=$(openssl rand -hex 16)
 
 # Shared OpenRouter secret name so new workspaces get OpenRouter cluster-wide
 # without a per-user key. Operators set KC_SHARED_ASSISTANT_SECRET to the Secret
