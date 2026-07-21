@@ -4,7 +4,7 @@
 
 image:
   repository: 780193927358.dkr.ecr.eu-west-1.amazonaws.com/kube-coder
-  tag: devlaptop-v1.35.0
+  tag: devlaptop-v1.36.0
   pullPolicy: Always
   # EKS nodes pull the runtime image through their node role. This is separate
   # from kube-coder-ecr, which authenticates user-initiated Depot pushes.
