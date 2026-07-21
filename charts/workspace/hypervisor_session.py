@@ -662,9 +662,10 @@ class CursorAdapter(_StructuredCliAdapter):
     so we pass --force; --trust skips the workspace-trust prompt
     (print-mode-only flag, documented for exactly this).
 
-    NOTE: tool_call rendering is intentionally skipped pending an in-pod
-    capture of the real started/completed payload shapes — same
-    empirical-refinement path ante/opencode/codex took.
+    tool_call events wrap the payload as {"<variant>ToolCall": {args, result}}
+    (e.g. readToolCall/shellToolCall — captured from the CLI bundle and the
+    documented schema); the name is the variant key minus the ToolCall suffix,
+    and completed results are {"success": {...}} or an error-shaped variant.
     """
 
     kind = 'cursor'
@@ -713,7 +714,39 @@ class CursorAdapter(_StructuredCliAdapter):
                 ctx['_emitted'] = True
                 return [{'role': 'assistant', 'type': 'message', 'text': txt}]
             return []
-        return []  # system/user echoes, tool_call chatter, deltas
+        if t == 'tool_call':
+            inner = o.get('tool_call')
+            if not isinstance(inner, dict):
+                return []
+            variant = next((k for k, v in inner.items()
+                            if k.endswith('ToolCall') and isinstance(v, dict)),
+                           None)
+            if variant is None:
+                return []
+            payload = inner[variant]
+            cid = o.get('call_id') or ''
+            if o.get('subtype') == 'completed':
+                result = payload.get('result')
+                result = result if isinstance(result, dict) else {}
+                ctx['_emitted'] = True
+                if isinstance(result.get('success'), (dict, str)):
+                    body = result['success']
+                    return [{'role': 'system', 'type': 'tool_result',
+                             'tool_use_id': cid, 'is_error': False,
+                             'text': _lift_text(body) or _stringify(body)}]
+                return [{'role': 'system', 'type': 'tool_result',
+                         'tool_use_id': cid, 'is_error': True,
+                         'text': _stringify(result) or 'cursor tool error'}]
+            if o.get('subtype') == 'started':
+                ctx['_emitted'] = True
+                name = variant[:-len('ToolCall')] or 'tool'
+                args = payload.get('args')
+                return [{'role': 'assistant', 'type': 'tool_call',
+                         'tool_id': cid,
+                         'tool': {'name': name,
+                                  'input': args if isinstance(args, dict) else {}}}]
+            return []
+        return []  # system/user echoes, deltas
 
 
 _ADAPTERS: Dict[str, Adapter] = {

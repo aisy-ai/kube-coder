@@ -937,12 +937,15 @@ class SubscriptionStatusManagerTests(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp(prefix='kctest-sub-')
         self._orig_claude = server.SubscriptionStatusManager.CLAUDE_CREDS
         self._orig_codex = server.SubscriptionStatusManager.CODEX_AUTH
+        self._orig_cursor = server.SubscriptionStatusManager.CURSOR_AUTH
         server.SubscriptionStatusManager.CLAUDE_CREDS = os.path.join(self.tmpdir, 'claude.json')
         server.SubscriptionStatusManager.CODEX_AUTH = os.path.join(self.tmpdir, 'codex.json')
+        server.SubscriptionStatusManager.CURSOR_AUTH = os.path.join(self.tmpdir, 'cursor-auth.json')
 
     def tearDown(self):
         server.SubscriptionStatusManager.CLAUDE_CREDS = self._orig_claude
         server.SubscriptionStatusManager.CODEX_AUTH = self._orig_codex
+        server.SubscriptionStatusManager.CURSOR_AUTH = self._orig_cursor
         import shutil
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
@@ -995,6 +998,47 @@ class SubscriptionStatusManagerTests(unittest.TestCase):
                 json.dump({'OPENAI_API_KEY': 'sk-x', 'tokens': None}, f)
             self.assertEqual(
                 server.SubscriptionStatusManager._codex_status()['kind'], 'api_key')
+
+    def test_cursor_absent_cli_reports_unavailable(self):
+        with mock.patch('server.shutil.which', return_value=None):
+            self.assertEqual(server.SubscriptionStatusManager._cursor_status(),
+                             {'logged_in': False, 'available': False})
+
+    def test_cursor_not_logged_in_when_file_absent_or_empty(self):
+        with mock.patch('server.shutil.which', return_value='/usr/local/bin/cursor-agent'):
+            self.assertEqual(server.SubscriptionStatusManager._cursor_status(),
+                             {'logged_in': False})
+            with open(server.SubscriptionStatusManager.CURSOR_AUTH, 'w') as f:
+                json.dump({}, f)
+            self.assertEqual(server.SubscriptionStatusManager._cursor_status(),
+                             {'logged_in': False})
+
+    def test_cursor_logged_in_reports_plan_and_email_never_tokens(self):
+        # `cursor-agent logout` deletes auth.json, so a non-empty auth file IS
+        # the login signal; exact key names are undocumented, so no field gates.
+        with mock.patch('server.shutil.which', return_value='/usr/local/bin/cursor-agent'):
+            with open(server.SubscriptionStatusManager.CURSOR_AUTH, 'w') as f:
+                json.dump({'accessToken': 'SECRET-tok', 'refreshToken': 'SECRET-ref',
+                           'email': 'dev@example.com'}, f)
+            st = server.SubscriptionStatusManager._cursor_status()
+        self.assertTrue(st['logged_in'])
+        self.assertEqual(st['kind'], 'subscription')
+        self.assertEqual(st['plan'], 'Cursor')
+        self.assertEqual(st['email'], 'dev@example.com')
+        self.assertNotIn('SECRET-tok', json.dumps(st))
+        self.assertNotIn('SECRET-ref', json.dumps(st))
+
+    def test_public_view_includes_cursor(self):
+        self.assertIn('cursor', server.SubscriptionStatusManager.public_view())
+
+    def test_cursor_logout_runs_cli_subcommand(self):
+        fake = mock.Mock(returncode=0, stdout='', stderr='')
+        with mock.patch('server.shutil.which', return_value='/usr/local/bin/cursor-agent'), \
+                mock.patch('server.subprocess.run', return_value=fake) as run:
+            ok, err = server.SubscriptionStatusManager.logout('cursor')
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+        self.assertEqual(run.call_args[0][0], ['cursor-agent', 'logout'])
 
     def test_logout_rejects_unknown_provider(self):
         ok, err = server.SubscriptionStatusManager.logout('aws')
