@@ -22,6 +22,14 @@ controller:
     pullPolicy: IfNotPresent
     pullSecretName: regcred
 
+  # Pod placement onto a dedicated node pool — same rationale as the workspace
+  # chart's top-level `scheduling` (see charts/workspace/values.yaml). Applied
+  # to the controller Deployment and its oauth2-proxy Deployment. Both empty
+  # by default -> renders nothing.
+  scheduling:
+    nodeSelector: {}
+    tolerations: []
+
   # A workspace is any Deployment whose name starts with this prefix. The
   # username shown in the UI is the name minus the prefix. Mirrors the
   # ws-<user> convention used by the workspace chart.
@@ -96,6 +104,11 @@ controller:
 
 ingress:
   className: nginx
+  # Arbitrary annotations merged into the controller Ingress, on top of the
+  # chart's own — same rationale as the workspace chart's
+  # ingress.extraAnnotations. Empty by default -> no change to rendered
+  # annotations.
+  extraAnnotations: {}
   tls:
     enabled: true
     # REQUIRED when tls.enabled — cert-manager writes the issued cert here.
@@ -108,6 +121,12 @@ oauth2:
   cookieSecret: ""   # 32 chars: openssl rand -base64 64 | tr -d '\n=+/' | head -c 32
   clientId: ""
   clientSecret: ""
+  # Bring your own Secret (e.g. synced by External Secrets Operator) instead
+  # of the inline stringData Secret below — must expose keys client-id,
+  # client-secret, cookie-secret. When set, the chart renders no oauth2
+  # Secret of its own and the cookieSecret/clientId/clientSecret `required`
+  # guards below are skipped (their values are ignored).
+  existingSecretName: ""
   # THE access gate — comma-separated GitHub usernames allowed to sign in.
   githubUsers: ""
   githubOrg: ""

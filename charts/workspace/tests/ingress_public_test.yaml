@@ -178,6 +178,60 @@ tests:
           path: spec.template.spec.containers[0].args
           content: --cookie-refresh=2h0m0s
 
+  - it: oauth2-proxy.yaml renders 5 documents by default (Secret + Deployment + Service + Ingress + PDB)
+    template: templates/oauth2-proxy.yaml
+    set:
+      ingress.auth.type: oauth2
+      oauth2.cookieSecret: cs
+      oauth2.clientId: cid
+      oauth2.clientSecret: csec
+    asserts:
+      - hasDocuments:
+          count: 5
+
+  - it: existingSecretName suppresses the inline Secret (4 documents, no required guard)
+    template: templates/oauth2-proxy.yaml
+    set:
+      ingress.auth.type: oauth2
+      oauth2.existingSecretName: my-oauth2-secret
+    asserts:
+      - hasDocuments:
+          count: 4
+
+  - it: existingSecretName wires the Deployment env from the referenced Secret
+    template: templates/oauth2-proxy.yaml
+    set:
+      ingress.auth.type: oauth2
+      oauth2.existingSecretName: my-oauth2-secret
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OAUTH2_PROXY_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: my-oauth2-secret
+                key: client-id
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OAUTH2_PROXY_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: my-oauth2-secret
+                key: client-secret
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OAUTH2_PROXY_COOKIE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: my-oauth2-secret
+                key: cookie-secret
+
   - it: workspace Role does NOT grant `list` on Secrets — cross-tenant enumeration vector
     template: templates/serviceaccount.yaml
     documentIndex: 1

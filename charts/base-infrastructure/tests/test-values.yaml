@@ -1,0 +1,10 @@
+namespace: test
+
+registry:
+  name: regcred
+  server: registry.digitalocean.com
+
+build:
+  mode: buildkit
+  kanikoImage: gcr.io/kaniko-project/executor:latest
+  defaultDestinationRepo: test-registry/builds

@@ -1,0 +1,36 @@
+suite: controller ingress.extraAnnotations + tls.enabled:false
+templates:
+  - templates/ingress.yaml
+values:
+  - test-values.yaml
+tests:
+  - it: extraAnnotations is absent by default
+    asserts:
+      - notExists:
+          path: metadata.annotations.team
+
+  - it: extraAnnotations merges into the controller Ingress
+    set:
+      ingress.extraAnnotations:
+        team: platform
+        cost-center: kube-coder
+    asserts:
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+      - equal:
+          path: metadata.annotations["cost-center"]
+          value: kube-coder
+      # existing annotations must still render alongside the extra ones
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/proxy-buffer-size"]
+          value: "16k"
+
+  - it: tls.enabled=false renders no tls block / cert-manager / secretName required guard
+    set:
+      ingress.tls.enabled: false
+    asserts:
+      - notExists:
+          path: spec.tls
+      - notExists:
+          path: metadata.annotations["cert-manager.io/cluster-issuer"]

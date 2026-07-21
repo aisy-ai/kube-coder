@@ -34,6 +34,17 @@ image:
   pullPolicy: Always
   pullSecretName: regcred
 
+# Pod placement onto a dedicated node pool (e.g. a Karpenter NodePool reserved
+# for kube-coder workspaces). Both empty by default so upstream/DigitalOcean
+# deployments keep scheduling onto any node; a fork that dedicates a pool sets
+# both together (a nodeSelector alone would leave the pool's taint unmatched
+# and the pod stuck Pending; a toleration alone would let it land elsewhere).
+# Applied to every long-running workspace pod: the ide Deployment, the
+# holding-page Deployment, and the oauth2-proxy Deployment.
+scheduling:
+  nodeSelector: {}
+  tolerations: []
+
 # Ingress configuration
 #   auth.type:
 #     "basic"  — http basic auth from .ingress.auth.secretName
@@ -46,6 +57,21 @@ ingress:
   # /api/files/upload bodies with a 413 before they reach server.py. Keep in
   # sync with MAX_UPLOAD_BYTES in server.py (200 MiB).
   bodySize: "200m"
+  # Arbitrary annotations merged into EVERY Ingress this chart renders (all
+  # five ingress*.yaml files), on top of the chart's own. For annotations a
+  # fork's ALB/edge integration needs on every workspace Ingress (e.g.
+  # alb.ingress.kubernetes.io/* passthrough markers) without patching each
+  # template. Empty by default -> no change to rendered annotations.
+  extraAnnotations: {}
+  # nginx's oauth2 auth_request subrequest normally re-enters the public
+  # hostname (https://$host/oauth2/auth) — fine on DigitalOcean/upstream, but
+  # on an edge that terminates TLS in front of ingress-nginx (ALB, Cloudflare)
+  # that subrequest round-trips back out through the edge for every request.
+  # "internal" points auth-url at the in-cluster oauth2-proxy Service instead;
+  # auth-signin (the browser's redirect target) is unaffected either way — it
+  # must stay externally reachable. Default "external" is byte-identical to
+  # upstream.
+  oauth2AuthMode: external
   # Emit a configuration-snippet on the Bearer-API ingress that strips identity
   # headers at the edge. Only enable on clusters whose ingress-nginx allows
   # snippet annotations — with snippets disabled (this cluster: CVE-2021-25742
@@ -98,6 +124,12 @@ oauth2:
   cookieSecret: ""        # 16/24/32 random bytes, base64-encoded
   clientId: ""            # GitHub OAuth App client id
   clientSecret: ""        # GitHub OAuth App client secret
+  # Bring your own Secret (e.g. synced by External Secrets Operator) instead
+  # of the inline stringData Secret below — must expose keys client-id,
+  # client-secret, cookie-secret. When set, the chart renders no oauth2
+  # Secret of its own and the cookieSecret/clientId/clientSecret `required`
+  # guards below are skipped (their values are ignored).
+  existingSecretName: ""
   githubUsers: ""         # comma-separated allowlist (optional)
   githubOrg: ""           # restrict to org members (optional)
   githubTeam: ""          # restrict to team slug (optional)
@@ -207,6 +239,26 @@ quota:
     defaultLimitCpu: "1"
     defaultLimitMemory: 1Gi
 
+# Egress NetworkPolicy (opt-in). Off by default — Egress is intentionally
+# NOT restricted upstream (see templates/networkpolicy.yaml's own comment);
+# tightening it requires a per-cluster allowlist. When enabled, the SAME
+# NetworkPolicy that already scopes ingress to ws-<user> (+ oauth2-proxy)
+# also gets an egress allowlist: DNS to kube-system, and everything else
+# EXCEPT the private/link-local ranges (so pods can still reach GitHub,
+# registries, model providers — just not other in-cluster/VPC services).
+networkPolicy:
+  egress:
+    enabled: false
+    # Explicit cluster DNS endpoints that cannot be selected by namespace
+    # labels, notably hostNetwork NodeLocal DNS addresses. Each CIDR receives
+    # only UDP/TCP 53. The kube-system selector remains enabled as a fallback.
+    dnsCIDRs: []
+    # Additional NetworkPolicyEgressRule entries appended verbatim after the
+    # built-in DNS + internet-except-private-ranges rules (e.g. an explicit
+    # allow to the workspace-controller's self-serve port). Ignored unless
+    # egress.enabled is also true.
+    extraRules: []
+
 # Cross-namespace access for the workspace-controller admin console. With
 # per-workspace namespaces the controller runs in its own control-plane
 # namespace and reaches this workspace via a RoleBinding the chart renders here
@@ -235,12 +287,28 @@ controller:
 #     `docker run` from the user's shell, but a shell in either container
 #     can escape to the underlying node. On a shared multi-tenant cluster
 #     prefer `kaniko` unless `docker run` is required.
+#
+#   mode: depot
+#     Image builds run on Depot's (https://depot.dev) remote builders instead
+#     of a local Kaniko Job or a privileged dind sidecar: no Job RBAC, no
+#     dind, no PVC access from the builder. `docker build`/`docker-build`
+#     from the user's shell are wired to `depot build`; `docker run`/`docker
+#     compose` are NOT available (no daemon at all in this mode). Requires
+#     base-infrastructure's own `build.mode` also set to `depot` (it renders
+#     the depot-wrapper ConfigMap this chart mounts).
 build:
   mode: kaniko
   # Pinned for reproducible builds; Renovate bumps the tag+digest weekly.
   kanikoImage: gcr.io/kaniko-project/executor:v1.24.0
   pushSecretName: regcred
   defaultDestinationRepo: registry.digitalocean.com/resourceloop/coder
+  depot:
+    projectId: ""         # Depot project id (build.mode=depot only)
+    tokenSecretName: ""   # Secret with key `depot-token` (build.mode=depot only)
+    # Optional kubernetes.io/dockerconfigjson Secret. Its .dockerconfigjson key
+    # is mounted as Docker's config.json so Depot can push to private registries
+    # without exposing cloud-provider credentials to the workspace.
+    registrySecretName: ""
 
 # SSH server configuration. When enabled, an `ssh-server` sidecar runs in
 # the workspace pod (root, port 22, shares the home PVC). Access via

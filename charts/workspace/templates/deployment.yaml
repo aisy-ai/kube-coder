@@ -49,6 +49,9 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      {{- if or .Values.scheduling.nodeSelector .Values.scheduling.tolerations }}
+      {{- include "workspace.scheduling" . | nindent 6 }}
+      {{- end }}
       containers:
       - name: ide
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -72,6 +75,19 @@ spec:
           value: "/certs/client"
         - name: DOCKER_TLS_VERIFY
           value: "1"
+        {{- end }}
+        {{- if eq .Values.build.mode "depot" }}
+        - name: DEPOT_PROJECT_ID
+          value: {{ required "build.depot.projectId is required when build.mode=depot" .Values.build.depot.projectId | quote }}
+        - name: DEPOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ required "build.depot.tokenSecretName is required when build.mode=depot" .Values.build.depot.tokenSecretName }}
+              key: depot-token
+        {{- if .Values.build.depot.registrySecretName }}
+        - name: DOCKER_CONFIG
+          value: /var/run/kube-coder/docker
+        {{- end }}
         {{- end }}
         {{- with .Values.user.env }}
         {{- toYaml . | nindent 8 }}
@@ -284,9 +300,25 @@ spec:
           mountPath: /certs/client
           readOnly: true
         {{- end }}
+        {{- if eq .Values.build.mode "depot" }}
+        - name: depot-wrapper
+          mountPath: /usr/local/bin/docker-build
+          subPath: docker-build
+        # depot mode has no daemon at all, so the wrapper also stands in for
+        # the real `docker` binary (see depot-wrapper-configmap.yaml).
+        - name: depot-wrapper
+          mountPath: /usr/local/bin/docker
+          subPath: docker-build
+        {{- if .Values.build.depot.registrySecretName }}
+        - name: depot-registry
+          mountPath: /var/run/kube-coder/docker
+          readOnly: true
+        {{- end }}
+        {{- else }}
         - name: kaniko-wrapper
           mountPath: /usr/local/bin/docker-build
           subPath: docker-build
+        {{- end }}
         {{- if eq .Values.build.mode "buildkit" }}
         - name: buildkit-wrapper
           mountPath: /usr/local/bin/docker-buildx
@@ -415,10 +447,25 @@ spec:
           name: github-app-script-{{ .Values.user.name }}
           defaultMode: 0555
       {{- end }}
+      {{- if eq .Values.build.mode "depot" }}
+      - name: depot-wrapper
+        configMap:
+          name: depot-wrapper
+          defaultMode: 0555
+      {{- if .Values.build.depot.registrySecretName }}
+      - name: depot-registry
+        secret:
+          secretName: {{ .Values.build.depot.registrySecretName }}
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+      {{- end }}
+      {{- else }}
       - name: kaniko-wrapper
         configMap:
           name: kaniko-wrapper
           defaultMode: 0555
+      {{- end }}
       {{- if eq .Values.build.mode "buildkit" }}
       - name: buildkit-wrapper
         configMap:

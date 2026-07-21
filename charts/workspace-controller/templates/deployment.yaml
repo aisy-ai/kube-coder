@@ -42,6 +42,9 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      {{- if or .Values.controller.scheduling.nodeSelector .Values.controller.scheduling.tolerations }}
+      {{- include "wc.scheduling" . | nindent 6 }}
+      {{- end }}
       containers:
       - name: controller
         image: "{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}"

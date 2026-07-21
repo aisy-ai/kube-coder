@@ -34,6 +34,13 @@ jobs:
       - name: Lint base-infrastructure chart
         run: helm lint charts/base-infrastructure/
 
+      - name: Template base-infrastructure chart (depot build mode)
+        run: |
+          helm template test-bi charts/base-infrastructure/ \
+            -f charts/base-infrastructure/tests/test-values.yaml \
+            --set build.mode=depot \
+            > /dev/null
+
       - name: Lint workspace chart
         run: helm lint charts/workspace/ -f charts/workspace/tests/test-values.yaml
 
@@ -77,6 +84,9 @@ jobs:
 
       - name: Run unit tests (workspace-controller)
         run: helm unittest charts/workspace-controller/
+
+      - name: Run unit tests (base-infrastructure)
+        run: helm unittest charts/base-infrastructure/
 
   python-tests:
     name: Server.py Unit Tests

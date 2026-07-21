@@ -1,7 +1,9 @@
+{{- $oauth2SecretName := .Values.oauth2.existingSecretName | default "workspace-controller-oauth2" }}
+{{- if not .Values.oauth2.existingSecretName }}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: workspace-controller-oauth2
+  name: {{ $oauth2SecretName }}
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "wc.labels" . | nindent 4 }}
@@ -11,6 +13,7 @@ stringData:
   client-id: {{ required "oauth2.clientId is required" .Values.oauth2.clientId | quote }}
   client-secret: {{ required "oauth2.clientSecret is required" .Values.oauth2.clientSecret | quote }}
 ---
+{{- end }}
 # oauth2-proxy runs as a REVERSE PROXY here (not just the external-auth
 # sidecar the workspace chart uses): the single ingress sends every path to
 # it, it authenticates against GitHub, and forwards authed requests to the
@@ -47,6 +50,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      {{- if or .Values.controller.scheduling.nodeSelector .Values.controller.scheduling.tolerations }}
+      {{- include "wc.scheduling" . | nindent 6 }}
+      {{- end }}
       containers:
       - name: oauth2-proxy
         image: quay.io/oauth2-proxy/oauth2-proxy:v7.5.0
@@ -93,17 +99,17 @@ spec:
         - name: OAUTH2_PROXY_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: workspace-controller-oauth2
+              name: {{ $oauth2SecretName }}
               key: client-id
         - name: OAUTH2_PROXY_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
-              name: workspace-controller-oauth2
+              name: {{ $oauth2SecretName }}
               key: client-secret
         - name: OAUTH2_PROXY_COOKIE_SECRET
           valueFrom:
             secretKeyRef:
-              name: workspace-controller-oauth2
+              name: {{ $oauth2SecretName }}
               key: cookie-secret
         ports:
         - containerPort: 4180

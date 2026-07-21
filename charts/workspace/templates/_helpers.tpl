@@ -19,6 +19,40 @@ via the `proxy-set-headers` annotation (which is *not* a snippet and
 is allowed).
 */}}
 
+{{/* oauth2 auth_request URL for the nginx auth-url annotation. "external"
+(default) is byte-identical to upstream; "internal" targets the in-cluster
+oauth2-proxy Service directly (see ingress.oauth2AuthMode in values.yaml). */}}
+{{- define "workspace.oauth2AuthUrl" -}}
+{{- if eq .Values.ingress.oauth2AuthMode "internal" -}}
+http://oauth2-proxy-{{ .Values.user.name }}.{{ .Values.namespace }}.svc.cluster.local:4180/oauth2/auth
+{{- else -}}
+https://$host/oauth2/auth
+{{- end -}}
+{{- end -}}
+
+{{/* Extra annotations merged into every Ingress this chart renders. Empty by
+default -> renders nothing (byte-identical to upstream). Caller nindents this
+to the annotations block's indent level (nindent replaces every internal
+newline too, so a multi-key map comes out correctly indented as a whole). */}}
+{{- define "workspace.ingressExtraAnnotations" -}}
+{{- with .Values.ingress.extraAnnotations }}
+{{ toYaml . }}
+{{- end }}
+{{- end -}}
+
+{{/* Pod scheduling (nodeSelector/tolerations) onto a dedicated node pool.
+Both empty by default -> renders nothing (byte-identical to upstream). */}}
+{{- define "workspace.scheduling" -}}
+{{- if .Values.scheduling.nodeSelector }}
+nodeSelector:
+{{ toYaml .Values.scheduling.nodeSelector | indent 2 }}
+{{- end }}
+{{- if .Values.scheduling.tolerations }}
+tolerations:
+{{ toYaml .Values.scheduling.tolerations | indent 2 }}
+{{- end }}
+{{- end -}}
+
 {{/* ---- ResourceQuota derivation (#103) --------------------------------------
 Size the per-namespace ResourceQuota from the workspace pod's ACTUAL resource
 requests/limits, so a heavier workspace (a bigger ide, or the privileged dind

@@ -1,0 +1,70 @@
+{{- if eq .Values.build.mode "depot" }}
+# Depot (https://depot.dev) build mode: image builds run on Depot's remote
+# builders instead of a local Kaniko Job or a privileged dind sidecar — no
+# Job RBAC, no dind, no PVC access from the builder. This ConfigMap is
+# mounted at BOTH /usr/local/bin/docker-build (mirrors the kaniko/buildkit
+# convention — see configmaps.yaml) and /usr/local/bin/docker (depot mode has
+# no daemon at all, so this wrapper IS "docker" for the workspace shell).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: depot-wrapper
+  namespace: {{ .Values.namespace }}
+data:
+  docker-build: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    usage() { echo "Usage: docker-build -t <image:tag> [--file Dockerfile] [context]"; exit 1; }
+
+    PROG="$(basename "$0")"
+
+    # Mounted as /usr/local/bin/docker too (no daemon in depot mode, so this
+    # wrapper IS docker for the workspace shell). Only `docker build` is
+    # wired to Depot; everything else that needs a real daemon (run, compose,
+    # ...) fails fast with a clear message instead of "connection refused".
+    if [[ "$PROG" == "docker" ]]; then
+      SUBCMD="${1:-}"
+      case "$SUBCMD" in
+        build) shift ;;
+        ""|-*) usage ;;
+        *)
+          echo "docker: '$SUBCMD' is not supported in depot build mode (image builds only — no daemon, no 'docker run'/'docker compose'). Switch build.mode to buildkit if you need it." >&2
+          exit 2
+          ;;
+      esac
+    fi
+
+    # Keep the caller's argument vector byte-for-byte. Depot implements the
+    # Docker build flags itself; rebuilding a reduced argument list here used
+    # to silently discard --build-arg, --platform, --target, --secret, repeated
+    # tags, and --flag=value forms.
+    ORIGINAL_ARGS=("$@")
+    TAG_COUNT=0
+    for ((i = 0; i < ${#ORIGINAL_ARGS[@]}; i++)); do
+      case "${ORIGINAL_ARGS[$i]}" in
+        -t|--tag)
+          if (( i + 1 >= ${#ORIGINAL_ARGS[@]} )) || [[ -z "${ORIGINAL_ARGS[$((i + 1))]}" ]]; then
+            usage
+          fi
+          TAG_COUNT=$((TAG_COUNT + 1))
+          i=$((i + 1))
+          ;;
+        --tag=*)
+          [[ -n "${ORIGINAL_ARGS[$i]#--tag=}" ]] || usage
+          TAG_COUNT=$((TAG_COUNT + 1))
+          ;;
+      esac
+    done
+    if (( TAG_COUNT == 0 )); then
+      echo "docker-build: at least one -t/--tag is required so the image can be pushed" >&2
+      usage
+    fi
+
+    : "${DEPOT_PROJECT_ID:?DEPOT_PROJECT_ID is not set — set build.depot.projectId in values.yaml}"
+    : "${DEPOT_TOKEN:?DEPOT_TOKEN is not set — set build.depot.tokenSecretName in values.yaml}"
+
+    printf 'Running: depot build --project %q' "$DEPOT_PROJECT_ID"
+    printf ' %q' "${ORIGINAL_ARGS[@]}"
+    printf ' --push\n'
+    exec depot build --project "$DEPOT_PROJECT_ID" "${ORIGINAL_ARGS[@]}" --push
+{{- end }}

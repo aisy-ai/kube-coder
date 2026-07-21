@@ -1,0 +1,79 @@
+suite: depot-wrapper ConfigMap (build.mode=depot)
+templates:
+  - templates/depot-wrapper-configmap.yaml
+values:
+  - test-values.yaml
+tests:
+  - it: is absent when build.mode is not depot (default buildkit)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: is absent when build.mode is kaniko
+    set:
+      build.mode: kaniko
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders in the configured namespace when build.mode is depot
+    set:
+      build.mode: depot
+    asserts:
+      - equal:
+          path: metadata.name
+          value: depot-wrapper
+      - equal:
+          path: metadata.namespace
+          value: test
+
+  - it: the docker-build shim invokes the depot CLI with the project + tag/push flags
+    set:
+      build.mode: depot
+    asserts:
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: '#!/usr/bin/env bash'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: 'exec depot'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: '--project'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: 'DEPOT_PROJECT_ID'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: 'DEPOT_TOKEN'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: "--push"
+
+  - it: the shim rejects unsupported docker verbs (run, compose) with a clear message
+    set:
+      build.mode: depot
+    asserts:
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: "run.*compose"
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: "not supported in depot build mode"
+
+  - it: preserves ordinary docker build arguments while enforcing a pushed tag
+    set:
+      build.mode: depot
+    asserts:
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: 'ORIGINAL_ARGS=\("\$@"\)'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: '--tag=\*'
+      - matchRegex:
+          path: data["docker-build"]
+          pattern: 'exec depot build --project "\$DEPOT_PROJECT_ID" "\$\{ORIGINAL_ARGS\[@\]\}" --push'
+      - notMatchRegex:
+          path: data["docker-build"]
+          pattern: 'DEPOT_ARGS='

@@ -32,6 +32,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      {{- if or .Values.scheduling.nodeSelector .Values.scheduling.tolerations }}
+      {{- include "workspace.scheduling" . | nindent 6 }}
+      {{- end }}
       containers:
       - name: holding
         image: {{ .Values.holdingPage.image | default "nginxinc/nginx-unprivileged:1.27-alpine" }}
