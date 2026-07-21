@@ -121,8 +121,8 @@ else
     fi
 
     # cookieSecret length check on merged value. Find `cookie-secret:` in the
-    # rendered Secret manifest. oauth2-proxy accepts raw 16/24/32 bytes or
-    # their urlsafe base64-encoded forms (24/32/44 chars).
+    # rendered Secret manifest. The chart passes this string directly to
+    # oauth2-proxy, so it must itself be exactly 16, 24, or 32 bytes.
     COOKIE=$(echo "$RENDER_OUT" \
       | awk -F'"' '/^[[:space:]]*cookie-secret:[[:space:]]*"/{print $2; exit}')
     if [ -z "$COOKIE" ]; then
@@ -130,8 +130,8 @@ else
     else
       COOKIE_LEN=${#COOKIE}
       case "$COOKIE_LEN" in
-        16|24|32|44) pass "cookieSecret present ($COOKIE_LEN chars, merged)" ;;
-        *) fail "cookieSecret is $COOKIE_LEN chars; oauth2-proxy needs 16/24/32 (raw) or 24/32/44 (base64). Regenerate: openssl rand -base64 32" ;;
+        16|24|32) pass "cookieSecret present ($COOKIE_LEN chars, merged)" ;;
+        *) fail "cookieSecret is $COOKIE_LEN chars; oauth2-proxy needs exactly 16, 24, or 32 raw characters. Regenerate: openssl rand -hex 16" ;;
       esac
     fi
   fi
