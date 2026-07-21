@@ -439,6 +439,108 @@ class CodexAdapterTest(unittest.TestCase):
                                 'text': 'plain non-json line'}])
 
 
+class CursorAdapterTest(unittest.TestCase):
+    def setUp(self):
+        self.a = hs.CursorAdapter()
+
+    def test_init_event_captures_session_id(self):
+        ctx = {}
+        self.a._reset_turn(ctx)
+        out = self.a.parse(ctx, json.dumps(
+            {'type': 'system', 'subtype': 'init', 'session_id': 'sid-123'}))
+        self.assertEqual(out, [])
+        self.assertEqual(ctx['cursor_session_id'], 'sid-123')
+
+    def test_assistant_event_becomes_text(self):
+        ctx = {}
+        self.a._reset_turn(ctx)
+        out = self.a.parse(ctx, json.dumps(
+            {'type': 'assistant', 'session_id': 'sid-1',
+             'message': {'role': 'assistant',
+                         'content': [{'type': 'text', 'text': 'PONG'}]}}))
+        self.assertEqual(out, [{'role': 'assistant', 'type': 'message', 'text': 'PONG'}])
+        self.assertEqual(ctx['cursor_session_id'], 'sid-1')
+
+    def test_result_error_surfaces(self):
+        ctx = {}
+        self.a._reset_turn(ctx)
+        out = self.a.parse(ctx, json.dumps(
+            {'type': 'result', 'subtype': 'error', 'is_error': True,
+             'result': 'model unavailable', 'session_id': 'sid-1'}))
+        self.assertEqual(out, [{'role': 'system', 'type': 'error',
+                                'text': 'model unavailable'}])
+
+    def test_result_text_emitted_only_when_nothing_else_was(self):
+        # `result` repeats the final answer; use it as a fallback, never a dupe.
+        ctx = {}
+        self.a._reset_turn(ctx)
+        out = self.a.parse(ctx, json.dumps(
+            {'type': 'result', 'subtype': 'success', 'is_error': False,
+             'result': 'DONE', 'session_id': 'sid-2'}))
+        self.assertEqual(out, [{'role': 'assistant', 'type': 'message', 'text': 'DONE'}])
+        self.assertEqual(ctx['cursor_session_id'], 'sid-2')
+        ctx2 = {}
+        self.a._reset_turn(ctx2)
+        self.a.parse(ctx2, json.dumps(
+            {'type': 'assistant',
+             'message': {'content': [{'type': 'text', 'text': 'DONE'}]}}))
+        self.assertEqual(self.a.parse(ctx2, json.dumps(
+            {'type': 'result', 'subtype': 'success', 'is_error': False,
+             'result': 'DONE'})), [])
+
+    def test_user_and_tool_events_are_noise(self):
+        ctx = {}
+        self.a._reset_turn(ctx)
+        for ev in ({'type': 'user', 'message': {'content': 'hi'}},
+                   {'type': 'tool_call', 'subtype': 'started', 'call_id': 'c1'},
+                   {'type': 'tool_call', 'subtype': 'completed', 'call_id': 'c1'}):
+            self.assertEqual(self.a.parse(ctx, json.dumps(ev)), [])
+
+    def test_build_first_turn_and_resume(self):
+        ctx = {'workdir': '/home/dev', 'preamble': 'ROLE'}
+        spec = self.a.build(ctx, 'hi', first=True)
+        self.assertEqual(spec['argv'][0], 'cursor-agent')
+        self.assertIn('-p', spec['argv'])
+        self.assertIn('--force', spec['argv'])
+        self.assertIn('--trust', spec['argv'])
+        i = spec['argv'].index('--output-format')
+        self.assertEqual(spec['argv'][i + 1], 'stream-json')
+        self.assertEqual(spec['argv'][-1], 'ROLE\n\nhi')  # preamble prepended, turn 1
+        self.assertEqual(spec['cwd'], '/home/dev')
+        # resume uses the captured session id in --resume=<id> form (the flag's
+        # value is optional, so the `=` keeps the positional prompt unambiguous).
+        ctx['cursor_session_id'] = 'sid-9'
+        spec2 = self.a.build(ctx, 'again', first=False)
+        self.assertIn('--resume=sid-9', spec2['argv'])
+        self.assertEqual(spec2['argv'][-1], 'again')
+
+    def test_build_prefers_ctx_model_over_env(self):
+        # A per-thread model (#308) beats KC_CURSOR_MODEL.
+        ctx = {'workdir': '/home/dev', 'model': 'grok-4.5'}
+        with mock.patch.dict(hs.os.environ, {'KC_CURSOR_MODEL': 'composer-2.5'}):
+            spec = self.a.build(ctx, 'hi', first=True)
+        i = spec['argv'].index('--model')
+        self.assertEqual(spec['argv'][i + 1], 'grok-4.5')
+
+    def test_build_env_model_when_no_ctx_model(self):
+        ctx = {'workdir': '/home/dev'}
+        with mock.patch.dict(hs.os.environ, {'KC_CURSOR_MODEL': 'composer-2.5'}):
+            spec = self.a.build(ctx, 'hi', first=True)
+        i = spec['argv'].index('--model')
+        self.assertEqual(spec['argv'][i + 1], 'composer-2.5')
+
+    def test_raw_fallback_when_no_structured_events(self):
+        ctx = {}
+        self.a.build(ctx, 'hi', first=True)
+        self.a.parse(ctx, 'plain non-json line')
+        out = self.a.finalize(ctx, 0)
+        self.assertEqual(out, [{'role': 'assistant', 'type': 'message',
+                                'text': 'plain non-json line'}])
+
+    def test_adapter_registry_routes_cursor(self):
+        self.assertIsInstance(hs._adapter_for('cursor'), hs.CursorAdapter)
+
+
 class SoftDeleteTest(unittest.TestCase):
     """Soft-delete / revive / purge lifecycle (issue #260)."""
 

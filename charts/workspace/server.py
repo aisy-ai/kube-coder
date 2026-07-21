@@ -1047,10 +1047,11 @@ class ClaudeTaskManager:
     #   1. Claude Code   — always available (anthropic-hosted)
     #   2. Ante CLI      — always available (pre-installed in the image)
     #   3. Antigravity   — `agy` CLI; listed when its binary is present (OAuth login)
-    #   4. LibreFang     — agent-OS CLI; listed when its binary is present
-    #   5. OpenRouter    — OpenCode CLI proxied through OpenRouter
-    #   6. DeepSeek      — OpenCode CLI against DeepSeek's native API
-    #   7. Opensource GPU — kc-harness against the configured Ollama endpoint
+    #   4. Cursor        — `cursor-agent` CLI; listed when its binary is present
+    #   5. LibreFang     — agent-OS CLI; listed when its binary is present
+    #   6. OpenRouter    — OpenCode CLI proxied through OpenRouter
+    #   7. DeepSeek      — OpenCode CLI against DeepSeek's native API
+    #   8. Opensource GPU — kc-harness against the configured Ollama endpoint
     # The legacy `opencode-fallback` assistant was retired in favour of
     # kc-harness: same endpoint, narrow tool surface, XML-aware parser, so
     # small local models actually execute tools instead of describing them.
@@ -1075,6 +1076,15 @@ class ClaudeTaskManager:
         'codex': {
             'id': 'codex',
             'label': 'Codex',
+        },
+        # Cursor — the `cursor-agent` CLI, pre-installed in the image. Cursor
+        # subscription OAuth (no API key: `cursor-agent login` once in the
+        # pod), so it's listed whenever its binary is resolvable — same signal
+        # as Antigravity/Codex. Cursor's own Composer models have no public
+        # API, so this CLI is the only route to them.
+        'cursor': {
+            'id': 'cursor',
+            'label': 'Cursor',
         },
         # LibreFang — open-source agent OS (https://librefang.ai). Tasks talk
         # to its registry-bundled "coder" agent via `librefang chat`; the CLI
@@ -1121,6 +1131,15 @@ class ClaudeTaskManager:
             out.append(dict(
                 ClaudeTaskManager.ASSISTANTS['codex'],
                 model=os.environ.get('KC_CODEX_MODEL', ''),
+            ))
+        # Cursor — listed only when its CLI is resolvable (older images predate
+        # it; /usr/local/bin/cursor-agent is a symlink to a PVC path start.sh
+        # seeds). Auth is Cursor-subscription OAuth (`cursor-agent login` once
+        # in the pod), so binary presence is the right signal.
+        if shutil.which('cursor-agent'):
+            out.append(dict(
+                ClaudeTaskManager.ASSISTANTS['cursor'],
+                model=os.environ.get('KC_CURSOR_MODEL', ''),
             ))
         # LibreFang — listed only when its CLI is actually resolvable (older
         # images predate it, and /usr/local/bin/librefang is a symlink to a
@@ -1170,6 +1189,7 @@ class ClaudeTaskManager:
         'opencode-deepseek': 'KC_DEEPSEEK_MODELS',
         'codex': 'KC_CODEX_MODELS',
         'antigravity': 'KC_ANTIGRAVITY_MODELS',
+        'cursor': 'KC_CURSOR_MODELS',
     }
 
     @staticmethod
@@ -1190,6 +1210,13 @@ class ClaudeTaskManager:
             # Native DeepSeek API ids; the opencode adapter prepends `deepseek/`.
             default = os.environ.get('KC_DEEPSEEK_MODEL', 'deepseek-chat')
             return _dedup_keep_order([default, 'deepseek-chat', 'deepseek-reasoner'])
+        if assistant_id == 'cursor':
+            # Unlike codex/antigravity, cursor ships a built-in list: Composer
+            # is Cursor-exclusive (no public API), so surfacing it — plus Grok,
+            # which Cursor bills as first-party — IS the feature. `auto` lets
+            # Cursor's own picker choose. Curate via KC_CURSOR_MODELS.
+            default = os.environ.get('KC_CURSOR_MODEL', 'composer-2.5')
+            return _dedup_keep_order([default, 'composer-2.5', 'grok-4.5', 'auto'])
         return []
 
     @staticmethod
@@ -1287,6 +1314,17 @@ class ClaudeTaskManager:
             skip = '--dangerously-bypass-approvals-and-sandbox ' if auto_approve else ''
             model_flag = f'--model {_shell_quote(model)}' if model else ''
             return f'codex {skip}{model_flag}'.strip()
+        if assistant == 'cursor':
+            # Interactive Cursor TUI for the dashboard pane. Optional model via
+            # KC_CURSOR_MODEL (cursor-agent picks its own default otherwise);
+            # quoted so a hostile env var can't break out of the `bash -lc`
+            # shell_cmd built downstream in create_task(). The pod is externally
+            # sandboxed (k8s), so auto_approve uses --force (skip command
+            # approvals) — cursor's equivalent of codex's bypass flag.
+            model = os.environ.get('KC_CURSOR_MODEL', '')
+            skip = '--force ' if auto_approve else ''
+            model_flag = f'--model {_shell_quote(model)}' if model else ''
+            return f'cursor-agent {skip}{model_flag}'.strip()
         if assistant == 'librefang':
             # Interactive chat REPL with the registry's "coder" agent (synced
             # into ~/.librefang by `librefang init`). KC_LIBREFANG_AGENT

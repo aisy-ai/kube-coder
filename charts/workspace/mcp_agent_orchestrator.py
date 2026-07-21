@@ -239,7 +239,7 @@ def _append_sub_task_id(parent_task_id: str, child_task_id: str) -> None:
 # Assistants with a non-interactive one-shot "print" mode that exits when
 # the task is done. Anything not listed has no reliable headless interface
 # (kc-harness) and is always run interactively (prompt pasted into the REPL).
-_HEADLESS_CAPABLE = {'claude', 'ante', 'codex', 'antigravity', 'librefang', 'opencode-openrouter', 'opencode-deepseek'}
+_HEADLESS_CAPABLE = {'claude', 'ante', 'codex', 'cursor', 'antigravity', 'librefang', 'opencode-openrouter', 'opencode-deepseek'}
 
 
 def _codex_model_flag() -> str:
@@ -247,6 +247,14 @@ def _codex_model_flag() -> str:
     picks its own default). Mirrors server.py's assistant_command."""
     m = os.environ.get('KC_CODEX_MODEL', '')
     return f'-m {_shell_quote(m)} ' if m else ''
+
+
+def _cursor_model_flag() -> str:
+    """Optional `--model <model>` for cursor-agent; empty when KC_CURSOR_MODEL
+    is unset (cursor picks its own default). Mirrors server.py's
+    assistant_command."""
+    m = os.environ.get('KC_CURSOR_MODEL', '')
+    return f'--model {_shell_quote(m)} ' if m else ''
 
 
 def _opencode_model(assistant: str) -> str:
@@ -310,6 +318,10 @@ def _assistant_command(assistant: str, prompt: str = '', headless: bool = True) 
             # Interactive Codex TUI. The pod is externally sandboxed (k8s), so
             # bypass approvals/sandbox for the unattended sub-agent.
             return f'codex --dangerously-bypass-approvals-and-sandbox {_codex_model_flag()}'.rstrip()
+        if assistant == 'cursor':
+            # Interactive Cursor TUI. --force skips command approvals for the
+            # unattended sub-agent (no --trust: that flag is print-mode-only).
+            return f'cursor-agent --force {_cursor_model_flag()}'.rstrip()
         if assistant == 'librefang':
             # Interactive REPL also needs the daemon — see _assistant_command's
             # headless branch and _librefang_daemon_bootstrap().
@@ -330,6 +342,12 @@ def _assistant_command(assistant: str, prompt: str = '', headless: bool = True) 
         # message to stdout.
         return (f'codex exec --dangerously-bypass-approvals-and-sandbox '
                 f'--skip-git-repo-check {_codex_model_flag()}{q}')
+    if assistant == 'cursor':
+        # `cursor-agent -p` is the one-shot print mode (exits when done, final
+        # answer on stdout). --force auto-approves commands and --trust skips
+        # the workspace-trust prompt (print-mode-only flag) — without it an
+        # untrusted workdir would stall the unattended sub-agent.
+        return f'cursor-agent -p --force --trust {_cursor_model_flag()}{q}'
     if assistant == 'antigravity':
         # `agy -p` is the CLI's one-shot print mode (prompt on the command line,
         # exits when done). --dangerously-skip-permissions auto-approves tool
@@ -376,6 +394,7 @@ _ASSISTANTS_LIST = [
     {'id': 'claude', 'label': 'Claude Code'},
     {'id': 'ante', 'label': 'Ante CLI'},
     {'id': 'codex', 'label': 'Codex'},
+    {'id': 'cursor', 'label': 'Cursor'},
     {'id': 'antigravity', 'label': 'Antigravity'},
     {'id': 'librefang', 'label': 'LibreFang'},
     {'id': 'opencode-openrouter', 'label': 'OpenRouter'},

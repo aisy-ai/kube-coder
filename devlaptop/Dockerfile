@@ -123,6 +123,30 @@ RUN npm install -g opencode-ai@${OPENCODE_VERSION}
 ARG CODEX_VERSION=0.144.5
 RUN npm install -g @openai/codex@${CODEX_VERSION}
 
+# Cursor CLI (cursor-agent) — Cursor's terminal-native coding agent; surfaces
+# in the dashboard as the `cursor` assistant (the only route to Cursor's
+# Composer models, which have no public API) and drives the Hypervisor via
+# `cursor-agent -p --output-format stream-json`. Auth is Cursor-subscription
+# OAuth (no API key): `NO_OPEN_BROWSER=1 cursor-agent login` once in the pod;
+# state lives under ~/.cursor, which start.sh persists on the PVC. NOT a
+# single binary: the installer drops a launcher + bundled node runtime + JS
+# dist under ~/.local/share/cursor-agent/versions/<v>/ (the launcher
+# realpath-resolves its own dir), so the whole version dir is kept at
+# /opt/cursor/dist and start.sh seeds it onto the PVC — the usual
+# PVC-path-via-symlink idiom (/usr/local/bin/cursor-agent →
+# /home/dev/.cursor/bin/cursor-agent). The installer only ships "latest" (no
+# version pin), so rebuilds float — a documented manual exception like Ante
+# (see docs/SUPPLY_CHAIN.md); the baked version is recorded in
+# /opt/cursor/dist/.kc-image-version. https://cursor.com/docs/cli
+RUN curl -fsS https://cursor.com/install | bash \
+    && V="$(ls /root/.local/share/cursor-agent/versions)" \
+    && mkdir -p /opt/cursor \
+    && cp -a "/root/.local/share/cursor-agent/versions/$V" /opt/cursor/dist \
+    && printf '%s\n' "$V" > /opt/cursor/dist/.kc-image-version \
+    && test -x /opt/cursor/dist/cursor-agent \
+    && rm -rf /root/.local/share/cursor-agent /root/.local/bin/cursor-agent /root/.local/bin/agent \
+    && ln -sfn /home/dev/.cursor/bin/cursor-agent /usr/local/bin/cursor-agent
+
 # Antigravity CLI (agy) — Google's terminal-native coding agent. Selected
 # per-task in the dashboard (the `antigravity` assistant) and spawnable via the
 # agent-orchestrator. Auth is OAuth Google Sign-In (no API key) — the user runs

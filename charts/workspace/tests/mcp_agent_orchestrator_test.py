@@ -62,6 +62,34 @@ class AssistantCommandTests(unittest.TestCase):
         self.assertIn('codex', orch._HEADLESS_CAPABLE)
         self.assertIn('codex', {a['id'] for a in orch._ASSISTANTS_LIST})
 
+    def test_headless_cursor_has_print_force_and_trust(self):
+        with mock.patch.dict(orch.os.environ, {}, clear=False):
+            orch.os.environ.pop('KC_CURSOR_MODEL', None)
+            cmd = orch._assistant_command('cursor', 'write tests', headless=True)
+        self.assertIn('cursor-agent', cmd)
+        self.assertIn('-p', cmd)
+        self.assertIn('--force', cmd)
+        # --trust skips the workspace-trust prompt; valid only with --print,
+        # which is exactly the headless branch.
+        self.assertIn('--trust', cmd)
+        self.assertIn("'write tests'", cmd)
+
+    def test_headless_cursor_model_flag_from_env(self):
+        with mock.patch.dict(orch.os.environ, {'KC_CURSOR_MODEL': 'composer-2.5'}):
+            cmd = orch._assistant_command('cursor', 'x', headless=True)
+        self.assertIn('--model composer-2.5', cmd)
+
+    def test_interactive_cursor_is_tui_with_force_no_trust(self):
+        with mock.patch.dict(orch.os.environ, {}, clear=False):
+            orch.os.environ.pop('KC_CURSOR_MODEL', None)
+            cmd = orch._assistant_command('cursor', 'ignored', headless=False)
+        # --trust is print-mode-only (rejected by the interactive TUI).
+        self.assertEqual(cmd, 'cursor-agent --force')
+
+    def test_cursor_is_headless_capable_and_listed(self):
+        self.assertIn('cursor', orch._HEADLESS_CAPABLE)
+        self.assertIn('cursor', {a['id'] for a in orch._ASSISTANTS_LIST})
+
     def test_headless_antigravity_has_print_and_skip_permissions(self):
         cmd = orch._assistant_command('antigravity', 'write tests', headless=True)
         self.assertIn('agy', cmd)

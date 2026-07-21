@@ -61,13 +61,17 @@ gh secret set RENOVATE_TOKEN --repo imran31415/kube-coder   # paste the PAT when
 
 ## Manual-bump exceptions
 
-Two artifacts have no datasource Renovate can track and are bumped by hand
+Three artifacts have no datasource Renovate can track and are bumped by hand
 (current version at the linked probe, then rebuild the image):
 
 - **Ante** (`ANTE_VERSION`) — channel/manifest distribution, no GitHub release or
   OCI tag. Pinned to a concrete release manifest under
   `https://download.ante.run/releases/<version>/manifest.json`; current stable at
   `https://download.ante.run/channels/stable/manifest.json`.
+- **Cursor CLI** (no version arg) — the official installer
+  (`curl https://cursor.com/install`) only ships "latest"; no GitHub release,
+  OCI tag, or pinnable manifest. The version baked into an image is recorded at
+  `/opt/cursor/dist/.kc-image-version`; rebuild to refresh.
 - **Firefox** (`FIREFOX_VERSION`) — Mozilla CDN, no Renovate datasource. Current
   at `https://product-details.mozilla.org/1.0/firefox_versions.json`
   (`LATEST_FIREFOX_VERSION`).

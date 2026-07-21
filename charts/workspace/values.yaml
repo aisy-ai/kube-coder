@@ -395,6 +395,17 @@ assistant:
   # login persists on the PVC. Only an optional model override lives here.
   antigravity:
     model: ""                             # KC_ANTIGRAVITY_MODEL (blank = agy's default)
+  # Cursor (https://cursor.com) — the `cursor-agent` CLI, pre-installed in the
+  # image. Auth is Cursor-subscription OAuth, NOT an API key: it appears as a
+  # dashboard assistant automatically, and each user runs
+  # `NO_OPEN_BROWSER=1 cursor-agent login` once in the pod (prints a URL) —
+  # the login persists on the PVC. Cursor's own Composer models have no public
+  # API, so this assistant is the only route to them. The in-chat switcher
+  # ships composer-2.5 / grok-4.5 / auto by default; `models` replaces that
+  # list (comma-separated slugs), `model` just reorders the default first.
+  cursor:
+    model: ""                             # KC_CURSOR_MODEL (blank = composer-2.5)
+    models: ""                            # KC_CURSOR_MODELS (blank = built-in list)
   # LibreFang (https://librefang.ai) — open-source agent OS. The CLI is
   # pre-installed in the image (like Ante) and reuses whatever provider keys
   # are configured elsewhere (ANTHROPIC_API_KEY, OPENROUTER_API_KEY, …), so

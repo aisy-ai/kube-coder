@@ -643,11 +643,85 @@ class CodexAdapter(_StructuredCliAdapter):
         return []  # turn.started / item.started / turn.completed / retry chatter
 
 
+class CursorAdapter(_StructuredCliAdapter):
+    """`cursor-agent -p --output-format stream-json` (headless); multi-turn via
+    `--resume=<chatId>`.
+
+    Cursor's stream-json is Claude-Code-shaped (documented at
+    cursor.com/docs/cli/reference/output-format): every event carries a
+    `session_id`; `{"type":"system","subtype":"init"}` opens the turn,
+    `assistant` events carry message content blocks, `tool_call`
+    started/completed pairs wrap tool use, and a terminal
+    `{"type":"result","is_error":...,"result":"<text>"}` closes it. The
+    `result` text repeats the final answer, so it's only surfaced when no
+    assistant event already was (or as the error text when is_error).
+
+    Auth is Cursor-subscription OAuth (`cursor-agent login` once in the pod —
+    NO_OPEN_BROWSER=1 prints the URL; state under ~/.cursor which start.sh
+    persists on the PVC) — no API key. The pod is externally sandboxed (k8s),
+    so we pass --force; --trust skips the workspace-trust prompt
+    (print-mode-only flag, documented for exactly this).
+
+    NOTE: tool_call rendering is intentionally skipped pending an in-pod
+    capture of the real started/completed payload shapes — same
+    empirical-refinement path ante/opencode/codex took.
+    """
+
+    kind = 'cursor'
+
+    def build(self, ctx, text, first):
+        self._reset_turn(ctx)
+        argv = ['cursor-agent', '-p', '--output-format', 'stream-json',
+                '--force', '--trust']
+        # A per-thread model (#308) wins over the pod default (KC_CURSOR_MODEL);
+        # read fresh each turn so a mid-session switch takes effect.
+        model = (ctx.get('model') or os.environ.get('KC_CURSOR_MODEL', '')).strip()
+        if model:
+            argv += ['--model', model]
+        sid = ctx.get('cursor_session_id')
+        if sid:
+            # --resume's value is optional, so use the `=` form — a bare
+            # `--resume <id> <prompt>` would leave two positionals to bind.
+            argv.append(f'--resume={sid}')
+            prompt = text
+        else:
+            prompt = (ctx['preamble'] + '\n\n' + text) \
+                if (first and ctx.get('preamble')) else text
+        argv.append(prompt)
+        return {'argv': argv, 'cwd': ctx.get('workdir') or WORKSPACE_HOME}
+
+    def _parse_obj(self, ctx, o):
+        sid = _dig_session_id(o)
+        if sid:
+            ctx['cursor_session_id'] = sid
+        t = str(o.get('type') or '')
+        if t == 'result':
+            if o.get('is_error') or o.get('subtype') not in (None, 'success'):
+                ctx['_emitted'] = True
+                return [{'role': 'system', 'type': 'error',
+                         'text': _stringify(o.get('result'))
+                                 or o.get('subtype') or 'cursor-agent error'}]
+            if not ctx.get('_emitted'):
+                txt = _stringify(o.get('result'))
+                if txt:
+                    ctx['_emitted'] = True
+                    return [{'role': 'assistant', 'type': 'message', 'text': txt}]
+            return []
+        if t == 'assistant':
+            txt = _lift_text(o.get('message')) or _lift_text(o)
+            if txt:
+                ctx['_emitted'] = True
+                return [{'role': 'assistant', 'type': 'message', 'text': txt}]
+            return []
+        return []  # system/user echoes, tool_call chatter, deltas
+
+
 _ADAPTERS: Dict[str, Adapter] = {
     'claude': ClaudeAdapter(),
     'ante': AnteAdapter(),
     'opencode': OpencodeAdapter(),
     'codex': CodexAdapter(),
+    'cursor': CursorAdapter(),
     'fallback': FallbackAdapter(),
 }
 
@@ -659,6 +733,8 @@ def _adapter_for(assistant: str) -> Adapter:
         return _ADAPTERS['ante']
     if assistant == 'codex':
         return _ADAPTERS['codex']
+    if assistant == 'cursor':
+        return _ADAPTERS['cursor']
     if assistant.startswith('opencode'):
         return _ADAPTERS['opencode']
     return _ADAPTERS['fallback']

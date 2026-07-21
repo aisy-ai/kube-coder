@@ -25,6 +25,7 @@ const FALLBACK_ASSISTANTS: Assistant[] = [
   { id: 'claude', label: 'Claude Code', default: true },
   { id: 'ante', label: 'Ante CLI' },
   { id: 'codex', label: 'Codex' },
+  { id: 'cursor', label: 'Cursor' },
 ];
 
 export default function NewTaskScreen() {
