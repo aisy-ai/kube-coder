@@ -34,6 +34,9 @@ jobs:
         with:
           version: v3.21.3
 
+      - name: Verify packaged controller SPA
+        run: tests/controller-web-dist.sh
+
       - name: Lint base-infrastructure chart
         run: helm lint charts/base-infrastructure/
 
@@ -118,7 +121,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'yarn'
-          cache-dependency-path: charts/workspace/web/yarn.lock
+          cache-dependency-path: |
+            charts/workspace/web/yarn.lock
+            charts/workspace-controller/web/yarn.lock
 
       - name: Install SPA deps
         run: yarn --cwd charts/workspace/web install --frozen-lockfile
@@ -128,6 +133,12 @@ jobs:
 
       - name: Vitest
         run: yarn --cwd charts/workspace/web test
+
+      - name: Build controller SPA
+        run: make controller-web
+
+      - name: Verify committed controller SPA is current
+        run: git diff --exit-code -- charts/workspace-controller/web-dist/index.html
 
   docker-build:
     name: Docker Build Smoke Test
