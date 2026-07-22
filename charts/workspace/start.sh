@@ -76,6 +76,7 @@ persist_cred() {                      # $1 = subpath under HOME, $2 = dir|file
   done
 }
 persist_cred .expo            dir    # Expo / EAS (eas login, expo login)
+persist_cred .config/cursor   dir    # Cursor CLI OAuth — auth.json lives here (XDG), NOT ~/.cursor
 persist_cred .docker          dir    # docker login (registry auth)
 persist_cred .aws             dir    # aws configure / SSO cache
 persist_cred .config/gcloud   dir    # gcloud auth
@@ -599,10 +600,11 @@ for HOME_DIR in /home/ubuntu; do
   ln -sfn "$GEMINI_TARGET" "$LINK" 2>/dev/null || true
 done
 
-# Cursor CLI (cursor-agent): persist its login + config and keep the binary on
-# the PVC. Cursor keeps CLI state (the `cursor-agent login` session,
-# cli-config.json, chats) under ~/.cursor, so — like ~/.librefang below — one
-# PVC symlink persists data + binary together. /usr/local/bin/cursor-agent is a
+# Cursor CLI (cursor-agent): persist its config and keep the binary on the
+# PVC. Cursor keeps CLI settings/chats under ~/.cursor — but NOT the login:
+# `cursor-agent login` writes auth.json to ~/.config/cursor (XDG), persisted
+# via persist_cred above. Like ~/.librefang below, one PVC symlink covers the
+# ~/.cursor data + binary together. /usr/local/bin/cursor-agent is a
 # build-time symlink to the PVC path /home/dev/.cursor/bin/cursor-agent, seeded
 # from the image's /opt/cursor/cursor-agent below (bump the Dockerfile install
 # + rebuild to update). Auth is Cursor-subscription OAuth: each user runs

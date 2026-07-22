@@ -128,7 +128,8 @@ RUN npm install -g @openai/codex@${CODEX_VERSION}
 # Composer models, which have no public API) and drives the Hypervisor via
 # `cursor-agent -p --output-format stream-json`. Auth is Cursor-subscription
 # OAuth (no API key): `NO_OPEN_BROWSER=1 cursor-agent login` once in the pod;
-# state lives under ~/.cursor, which start.sh persists on the PVC. NOT a
+# tokens land in ~/.config/cursor (XDG) and settings/chats under ~/.cursor —
+# start.sh persists both on the PVC. NOT a
 # single binary: the installer drops a launcher + bundled node runtime + JS
 # dist under ~/.local/share/cursor-agent/versions/<v>/ (the launcher
 # realpath-resolves its own dir), so the whole version dir is kept at

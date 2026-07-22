@@ -3073,12 +3073,18 @@ class SubscriptionStatusManager:
 
     CLAUDE_CREDS = os.path.expanduser('~/.claude/.credentials.json')
     CODEX_AUTH = os.path.expanduser('~/.codex/auth.json')
+    # NOT under ~/.cursor: the CLI resolves XDG_CONFIG_HOME (default
+    # ~/.config) + cursor/auth.json for tokens — verified by stracing
+    # `cursor-agent logout` (and CURSOR_CONFIG_DIR does not move it).
+    # start.sh persists .config/cursor via persist_cred.
+    CURSOR_AUTH = os.path.expanduser('~/.config/cursor/auth.json')
 
     # provider -> CLI logout argv. Only these providers may be logged out, and
     # only via the CLI's own subcommand (never by us rm-ing credential files).
     LOGOUT_CMDS = {
         'claude': ['claude', 'auth', 'logout'],
         'codex': ['codex', 'logout'],
+        'cursor': ['cursor-agent', 'logout'],
     }
 
     @staticmethod
@@ -3127,11 +3133,31 @@ class SubscriptionStatusManager:
         return {'logged_in': False}
 
     @classmethod
+    def _cursor_status(cls):
+        # auth.json is written by `cursor-agent login` and deleted by
+        # `cursor-agent logout`, so a non-empty JSON object IS the login
+        # signal. Its field names are undocumented — no field gates; derive
+        # only known-non-secret bits (email) and never any token material.
+        if not shutil.which('cursor-agent'):
+            return {'logged_in': False, 'available': False}
+        data = cls._load_json(cls.CURSOR_AUTH)
+        if not isinstance(data, dict) or not data:
+            return {'logged_in': False}
+        email = data.get('email')
+        if not isinstance(email, str):
+            user = data.get('user')
+            email = user.get('email') if isinstance(user, dict) else ''
+            email = email if isinstance(email, str) else ''
+        return {'logged_in': True, 'kind': 'subscription', 'plan': 'Cursor',
+                'email': email}
+
+    @classmethod
     def public_view(cls):
         """Masked status for the UI — never includes any token material."""
         return {
             'claude': cls._claude_status(),
             'codex': cls._codex_status(),
+            'cursor': cls._cursor_status(),
         }
 
     @classmethod

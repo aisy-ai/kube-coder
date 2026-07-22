@@ -44,6 +44,25 @@ tests:
           path: data["start.sh"]
           pattern: 'ln -sfn "\$CURSOR_TARGET" "\$LINK"'
 
+  - it: persists the cursor OAuth login dir (.config/cursor) on the PVC
+    template: templates/workspace-entrypoint-configmap.yaml
+    asserts:
+      # cursor-agent writes auth.json to XDG config (~/.config/cursor), NOT
+      # ~/.cursor — without this redirect the one-time login is wiped with the
+      # ephemeral home on every pod restart.
+      - matchRegex:
+          path: data["start.sh"]
+          pattern: "persist_cred .config/cursor\\s+dir"
+
+  - it: mirrors the cursor auth dir into the SSH sidecar when ssh is enabled
+    template: templates/ssh-server-configmap.yaml
+    set:
+      ssh.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["entrypoint.sh"]
+          pattern: "ln -sfn /home/dev/.credentials/.config/cursor\\s+/home/ubuntu/.config/cursor"
+
   - it: open-source defaults inject no cursor env vars
     template: templates/deployment.yaml
     asserts:

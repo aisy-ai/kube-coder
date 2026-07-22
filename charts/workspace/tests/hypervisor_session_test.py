@@ -488,13 +488,62 @@ class CursorAdapterTest(unittest.TestCase):
             {'type': 'result', 'subtype': 'success', 'is_error': False,
              'result': 'DONE'})), [])
 
-    def test_user_and_tool_events_are_noise(self):
+    def test_user_events_are_noise(self):
         ctx = {}
         self.a._reset_turn(ctx)
-        for ev in ({'type': 'user', 'message': {'content': 'hi'}},
-                   {'type': 'tool_call', 'subtype': 'started', 'call_id': 'c1'},
-                   {'type': 'tool_call', 'subtype': 'completed', 'call_id': 'c1'}):
-            self.assertEqual(self.a.parse(ctx, json.dumps(ev)), [])
+        self.assertEqual(self.a.parse(ctx, json.dumps(
+            {'type': 'user', 'message': {'content': 'hi'}})), [])
+
+    def test_tool_call_started_renders_name_and_args(self):
+        # Documented shape: tool_call.tool_call = {"<variant>ToolCall": {args}}
+        # (cursor.com/docs/cli/reference/output-format); the tool name is the
+        # variant key minus the ToolCall suffix.
+        ctx = {}
+        self.a._reset_turn(ctx)
+        out = self.a.parse(ctx, json.dumps(
+            {'type': 'tool_call', 'subtype': 'started', 'call_id': 'c1',
+             'tool_call': {'readToolCall': {'args': {'path': 'file.txt'}}},
+             'session_id': 'sid-5'}))
+        self.assertEqual(out, [{'role': 'assistant', 'type': 'tool_call',
+                                'tool_id': 'c1',
+                                'tool': {'name': 'read',
+                                         'input': {'path': 'file.txt'}}}])
+        self.assertEqual(ctx['cursor_session_id'], 'sid-5')
+
+    def test_tool_call_completed_success_renders_result(self):
+        ctx = {}
+        self.a._reset_turn(ctx)
+        out = self.a.parse(ctx, json.dumps(
+            {'type': 'tool_call', 'subtype': 'completed', 'call_id': 'c1',
+             'tool_call': {'readToolCall': {
+                 'args': {'path': 'file.txt'},
+                 'result': {'success': {'content': 'file contents...',
+                                        'totalLines': 54}}}}}))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['role'], 'system')
+        self.assertEqual(out[0]['type'], 'tool_result')
+        self.assertEqual(out[0]['tool_use_id'], 'c1')
+        self.assertFalse(out[0]['is_error'])
+        self.assertIn('file contents...', out[0]['text'])
+
+    def test_tool_call_completed_error_flags_is_error(self):
+        ctx = {}
+        self.a._reset_turn(ctx)
+        out = self.a.parse(ctx, json.dumps(
+            {'type': 'tool_call', 'subtype': 'completed', 'call_id': 'c2',
+             'tool_call': {'shellToolCall': {
+                 'args': {'command': 'false'},
+                 'result': {'error': {'message': 'exit 1'}}}}}))
+        self.assertEqual(len(out), 1)
+        self.assertTrue(out[0]['is_error'])
+        self.assertIn('exit 1', out[0]['text'])
+
+    def test_tool_call_unknown_shape_is_skipped_not_crashed(self):
+        ctx = {}
+        self.a._reset_turn(ctx)
+        self.assertEqual(self.a.parse(ctx, json.dumps(
+            {'type': 'tool_call', 'subtype': 'started', 'call_id': 'c3',
+             'tool_call': 'weird-string'})), [])
 
     def test_build_first_turn_and_resume(self):
         ctx = {'workdir': '/home/dev', 'preamble': 'ROLE'}

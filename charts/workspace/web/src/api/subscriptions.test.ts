@@ -29,6 +29,7 @@ describe('subscriptions api (#251)', () => {
       subscriptions: {
         claude: { logged_in: true, kind: 'subscription', plan: 'max', expires_at: 123, expired: false, overridden_by_key: false },
         codex: { logged_in: false, available: false },
+        cursor: { logged_in: true, kind: 'subscription', plan: 'Cursor', email: 'dev@example.com' },
       },
     });
     const r = await getSubscriptions();
@@ -37,6 +38,7 @@ describe('subscriptions api (#251)', () => {
     expect(r.subscriptions.claude.logged_in).toBe(true);
     expect(r.subscriptions.claude.plan).toBe('max');
     expect(r.subscriptions.codex.available).toBe(false);
+    expect(r.subscriptions.cursor.email).toBe('dev@example.com');
   });
 
   it('logoutSubscription DELETEs the per-provider path', async () => {
@@ -44,5 +46,8 @@ describe('subscriptions api (#251)', () => {
     await logoutSubscription('codex');
     expect(calls[0].url).toContain('/api/subscriptions/codex');
     expect(calls[0].method).toBe('DELETE');
+    const calls2 = capture({ ok: true });
+    await logoutSubscription('cursor');
+    expect(calls2[0].url).toContain('/api/subscriptions/cursor');
   });
 });

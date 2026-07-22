@@ -28,6 +28,7 @@ const PROVIDERS: { var: ProviderVar; label: string; hint: string }[] = [
 const SUBSCRIPTIONS: { id: SubscriptionProvider; label: string }[] = [
   { id: 'claude', label: 'Claude' },
   { id: 'codex', label: 'Codex' },
+  { id: 'cursor', label: 'Cursor' },
 ];
 
 function formatExpiry(ms: number | null | undefined): string {
@@ -124,14 +125,16 @@ export function ProviderKeysSection() {
           <div class="settings-subs-title muted">Subscription logins</div>
           {SUBSCRIPTIONS.map((s) => {
             const st = subs[s.id];
-            // Codex isn't in older images — hide the row entirely when the CLI
-            // is absent and there's nothing to report.
-            if (s.id === 'codex' && st?.available === false && !st?.logged_in) return null;
+            // Codex/Cursor aren't in older images — hide the row entirely when
+            // the CLI is absent and there's nothing to report. (Claude never
+            // sets `available`, so its row always shows.)
+            if (st?.available === false && !st?.logged_in) return null;
             const busyThis = busy === `sub:${s.id}`;
             let tone: 'success' | 'warn' | 'neutral' = 'neutral';
             let text = 'not signed in';
             if (st?.logged_in) {
               const plan = st.plan ? ` · ${st.plan}` : '';
+              const who = st.email ? ` · ${st.email}` : '';
               if (st.kind === 'api_key') {
                 tone = 'success';
                 text = 'API key';
@@ -141,7 +144,7 @@ export function ProviderKeysSection() {
               } else {
                 tone = 'success';
                 const exp = formatExpiry(st.expires_at);
-                text = `subscription${plan}${exp ? ` · expires ${exp}` : ''}`;
+                text = `subscription${plan}${who}${exp ? ` · expires ${exp}` : ''}`;
               }
             }
             return (

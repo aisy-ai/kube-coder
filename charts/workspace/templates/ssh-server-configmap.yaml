@@ -89,19 +89,23 @@ data:
     mkdir -p /home/dev/.credentials/.expo \
              /home/dev/.credentials/.docker \
              /home/dev/.credentials/.aws \
-             /home/dev/.credentials/.config/gcloud
+             /home/dev/.credentials/.config/gcloud \
+             /home/dev/.credentials/.config/cursor
     chmod 700 /home/dev/.credentials/.expo /home/dev/.credentials/.docker \
-              /home/dev/.credentials/.aws /home/dev/.credentials/.config/gcloud
+              /home/dev/.credentials/.aws /home/dev/.credentials/.config/gcloud \
+              /home/dev/.credentials/.config/cursor
     touch /home/dev/.credentials/.npmrc /home/dev/.credentials/.git-credentials
     chmod 600 /home/dev/.credentials/.npmrc /home/dev/.credentials/.git-credentials
     ln -sfn /home/dev/.credentials/.expo           /home/ubuntu/.expo
     ln -sfn /home/dev/.credentials/.docker         /home/ubuntu/.docker
     ln -sfn /home/dev/.credentials/.aws            /home/ubuntu/.aws
     ln -sfn /home/dev/.credentials/.config/gcloud  /home/ubuntu/.config/gcloud
+    ln -sfn /home/dev/.credentials/.config/cursor  /home/ubuntu/.config/cursor
     ln -sf  /home/dev/.credentials/.npmrc           /home/ubuntu/.npmrc
     ln -sf  /home/dev/.credentials/.git-credentials /home/ubuntu/.git-credentials
     chown -h ubuntu:ubuntu /home/ubuntu/.expo /home/ubuntu/.docker /home/ubuntu/.aws \
-            /home/ubuntu/.config/gcloud /home/ubuntu/.npmrc /home/ubuntu/.git-credentials 2>/dev/null || true
+            /home/ubuntu/.config/gcloud /home/ubuntu/.config/cursor \
+            /home/ubuntu/.npmrc /home/ubuntu/.git-credentials 2>/dev/null || true
 
     # When a GitHub App is configured, the ide container's token-refresh
     # daemon writes a fresh GITHUB_TOKEN to /home/dev/.profile.d-github-env
